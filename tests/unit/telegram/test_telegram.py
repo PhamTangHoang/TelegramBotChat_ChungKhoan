@@ -6,6 +6,7 @@ import pytest
 from app.domain.enums import AnalysisKind, DataFreshness, Risk, RuleStatus, Signal
 from app.domain.schemas import IndicatorSnapshot, RuleReason, RuleResult
 from app.telegram.access_control import AccessDenied, RateLimiter, WhitelistAccessController
+from app.telegram.commands import HELP_TEXT, command_menu
 from app.telegram.formatter import chunk_message, format_technical_report
 from app.telegram.handlers import _classify_text
 
@@ -84,7 +85,16 @@ def test_message_chunking_preserves_all_content_and_limit() -> None:
 
 
 def test_natural_text_classification_supports_analysis_chart_market_and_help() -> None:
-    assert _classify_text("phân tích mã FPT") == ("analysis", "FPT")
+    assert _classify_text("phân tích mã FPT") == ("analyze", "FPT")
+    assert _classify_text("analyze FPT") == ("analyze", "FPT")
     assert _classify_text("vẽ biểu đồ VNM") == ("chart", "VNM")
     assert _classify_text("thị trường hôm nay thế nào") == ("market", None)
     assert _classify_text("xin chào") == ("help", None)
+
+
+def test_telegram_command_menu_and_help_describe_the_public_commands() -> None:
+    commands = {command.command: command.description for command in command_menu()}
+
+    assert set(commands) == {"start", "help", "analyze", "chart", "news", "market"}
+    assert "PP10Ulti" in HELP_TEXT
+    assert "/news FPT" in HELP_TEXT

@@ -34,7 +34,7 @@ health-only mode when `TELEGRAM_BOT_TOKEN` is empty.
 Public access keeps the per-chat rate limit but allows any Telegram user or group
 to call the bot. Use whitelist mode when the bot should remain private.
 
-Supported commands and natural-language shortcuts include `/pt FPT` or
+Supported commands and natural-language shortcuts include `/analyze FPT` or
 `phân tích FPT`, `/chart FPT` or `chart FPT`, and `/market` or `thị trường`.
 Other plain-text messages are answered by Gemini when `GEMINI_API_KEY` is set.
 

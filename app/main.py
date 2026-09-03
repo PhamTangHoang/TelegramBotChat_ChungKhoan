@@ -30,7 +30,7 @@ async def lifespan(_: FastAPI):
             from app.llm.gemini import GeminiExplainer
             from app.scheduler.scheduler import SchedulerService
             from app.services.analysis_service import MarketAnalysisService
-            from app.telegram.bot import create_dispatcher
+            from app.telegram.bot import configure_bot_commands, create_dispatcher
 
             calendar = HOSECalendar()
             service = MarketAnalysisService(
@@ -58,6 +58,7 @@ async def lifespan(_: FastAPI):
             scheduler = scheduler_service.build_scheduler()
             scheduler.start()
             bot, dispatcher = create_dispatcher(settings, service)
+            await configure_bot_commands(bot)
             polling_task = asyncio.create_task(dispatcher.start_polling(bot))
             logger.info("runtime started with Telegram and scheduler")
         except Exception:

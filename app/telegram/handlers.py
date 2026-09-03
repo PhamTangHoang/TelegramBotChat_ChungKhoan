@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from app.telegram.access_control import AccessDenied, RateLimiter, WhitelistAccessController
+from app.telegram.commands import HELP_TEXT
 from app.telegram.reliability import send_report_with_chart, send_text_chunks
 
 logger = logging.getLogger(__name__)
@@ -46,11 +47,11 @@ def _classify_text(value: str) -> tuple[str, str | None]:
         return "chart", chart_match.group(1).upper()
 
     analysis_match = re.search(
-        r"\b(?:phan tich(?: ky thuat)?|danh gia|pt)\s+(?:ma\s+)?([a-z]{2,5})\b",
+        r"\b(?:analyze|phan tich(?: ky thuat)?|danh gia)\s+(?:ma\s+)?([a-z]{2,5})\b",
         folded,
     )
     if analysis_match:
-        return "analysis", analysis_match.group(1).upper()
+        return "analyze", analysis_match.group(1).upper()
 
     if "thi truong" in folded or folded in {"market", "trang thai thi truong"}:
         return "market", None
@@ -63,8 +64,9 @@ def _classify_text(value: str) -> tuple[str, str | None]:
         "chao",
         "help",
         "market",
+        "analyze",
     }:
-        return "analysis", folded.upper()
+        return "analyze", folded.upper()
     return "chat", None
 
 
@@ -98,23 +100,31 @@ def build_router(
     async def start_handler(message: Message) -> None:
         if await authorized(message):
             await message.answer(
-                "VN Stock Analyst Bot sẵn sàng. Dùng /pt FPT, /chart FPT hoặc /market."
+                "VN Stock Analyst Bot sẵn sàng.\n\n"
+                "Dùng /analyze FPT để phân tích, /chart FPT để xem biểu đồ, "
+                "/news FPT để xem tin tức hoặc /market để xem thị trường.\n\n"
+                "Gõ /help để xem hướng dẫn đầy đủ."
             )
 
-    @router.message(Command("pt"))
-    async def pt_handler(message: Message, command: CommandObject) -> None:
+    @router.message(Command("help"))
+    async def help_handler(message: Message) -> None:
+        if await authorized(message):
+            await send_text_chunks(message.answer, HELP_TEXT)
+
+    @router.message(Command("analyze"))
+    async def analyze_handler(message: Message, command: CommandObject) -> None:
         if not await authorized(message):
             return
         symbol = (command.args or "").strip().upper()
         if not symbol:
-            await message.answer("Cú pháp: /pt FPT")
+            await message.answer("Cú pháp: /analyze FPT")
             return
         await message.answer("⏳ Đang phân tích dữ liệu...")
         try:
             report = await service.analyze(symbol)
             await send_report_with_chart(message, report.text, chart=report.chart)
         except Exception:
-            logger.exception("/pt failed for symbol=%s", symbol)
+            logger.exception("/analyze failed for symbol=%s", symbol)
             await message.answer("Không thể hoàn tất phân tích lúc này.")
 
     @router.message(Command("chart"))
@@ -151,24 +161,18 @@ def build_router(
         text = (message.text or "").strip()
         kind, symbol = _classify_text(text)
         if kind == "help":
-            await message.answer(
-                "VN Stock Analyst Bot hỗ trợ:\n"
-                "• /pt FPT hoặc: phân tích FPT\n"
-                "• /chart FPT hoặc: chart FPT\n"
-                "• /market hoặc: thị trường\n"
-                "Bạn cũng có thể chat tự nhiên để hỏi về cách dùng bot."
-            )
+            await send_text_chunks(message.answer, HELP_TEXT)
             return
         if kind == "market":
             await send_text_chunks(message.answer, await service.market())
             return
-        if kind == "analysis" and symbol is not None:
+        if kind == "analyze" and symbol is not None:
             await message.answer("⏳ Đang phân tích dữ liệu...")
             try:
                 report = await service.analyze(symbol)
                 await send_report_with_chart(message, report.text, chart=report.chart)
             except Exception:
-                logger.exception("natural analysis failed for symbol=%s", symbol)
+                logger.exception("natural analyze failed for symbol=%s", symbol)
                 await message.answer("Không thể hoàn tất phân tích lúc này.")
             return
         if kind == "chart" and symbol is not None:

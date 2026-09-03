@@ -95,7 +95,7 @@ class MarketAnalysisService:
     async def chat(self, message: str) -> str:
         if self.gemini is None:
             return (
-                "T chưa bật Gemini để chat tự nhiên. Dùng /pt FPT, /chart FPT "
+                "T chưa bật Gemini để chat tự nhiên. Dùng /analyze FPT, /chart FPT "
                 "hoặc /market để sử dụng các chức năng chính."
             )
         try:
@@ -103,7 +103,7 @@ class MarketAnalysisService:
         except GeminiError:
             logger.warning("Gemini chat unavailable", exc_info=True)
             return (
-                "Hiện chưa thể trả lời câu chat tự nhiên. Dùng /pt FPT, "
+                "Hiện chưa thể trả lời câu chat tự nhiên. Dùng /analyze FPT, "
                 "/chart FPT hoặc /market nhé."
             )
 
