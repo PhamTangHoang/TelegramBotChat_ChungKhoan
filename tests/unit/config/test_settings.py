@@ -19,3 +19,14 @@ def test_settings_accepts_missing_live_credentials_for_local_development() -> No
 
     assert settings.gemini_api_key is None
     assert settings.telegram_bot_token is None
+
+
+def test_settings_normalizes_blank_live_credentials() -> None:
+    settings = Settings(
+        database_url="sqlite+pysqlite:///:memory:",
+        gemini_api_key=" ",
+        telegram_bot_token="",
+    )
+
+    assert settings.gemini_api_key is None
+    assert settings.telegram_bot_token is None

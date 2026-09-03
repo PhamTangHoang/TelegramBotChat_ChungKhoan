@@ -2,7 +2,7 @@ from functools import lru_cache
 from typing import Annotated
 
 from pydantic import BeforeValidator, Field, field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 def _csv_strings(value: str | tuple[str, ...] | list[str]) -> tuple[str, ...]:
@@ -23,9 +23,9 @@ def _csv_values(value: str | tuple[str, ...] | list[str]) -> tuple[str, ...]:
     return tuple(str(item).strip() for item in value if str(item).strip())
 
 
-CsvStrings = Annotated[tuple[str, ...], BeforeValidator(_csv_strings)]
-CsvInts = Annotated[tuple[int, ...], BeforeValidator(_csv_ints)]
-CsvValues = Annotated[tuple[str, ...], BeforeValidator(_csv_values)]
+CsvStrings = Annotated[tuple[str, ...], NoDecode, BeforeValidator(_csv_strings)]
+CsvInts = Annotated[tuple[int, ...], NoDecode, BeforeValidator(_csv_ints)]
+CsvValues = Annotated[tuple[str, ...], NoDecode, BeforeValidator(_csv_values)]
 
 
 class Settings(BaseSettings):
@@ -75,6 +75,14 @@ class Settings(BaseSettings):
         if hour not in range(24) or minute not in range(60):
             raise ValueError("eod_settle_job_time must use a valid time")
         return f"{hour:02d}:{minute:02d}"
+
+    @field_validator("gemini_api_key", "telegram_bot_token", mode="before")
+    @classmethod
+    def normalize_optional_credentials(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
 
     @field_validator("log_level")
     @classmethod

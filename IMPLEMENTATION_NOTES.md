@@ -30,6 +30,8 @@ the v1.5 business semantics.
   tracked separately in `scheduler_runs`.
 - Docker is the supported runtime for the pinned dependency set (`python:3.12-slim`);
   host-only tests may use a different already-installed Python package set.
+- `numpy==2.2.6` is pinned because `vnstock_ezchart` requires `numpy<2.3` and
+  this keeps the Docker install on a compatible CPython 3.12 wheel.
 
 If a future change conflicts with these choices, add an ADR and update the rule,
 data and prompt versions together.
