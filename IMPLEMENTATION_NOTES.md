@@ -28,6 +28,8 @@ the v1.5 business semantics.
   `kbs` or `vci`.
 - `analysis_runs` keeps legitimate observations; scheduler execution identity is
   tracked separately in `scheduler_runs`.
+- Docker is the supported runtime for the pinned dependency set (`python:3.12-slim`);
+  host-only tests may use a different already-installed Python package set.
 
 If a future change conflicts with these choices, add an ADR and update the rule,
 data and prompt versions together.

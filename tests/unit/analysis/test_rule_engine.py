@@ -105,6 +105,37 @@ def test_missing_relative_strength_returns_insufficient_data() -> None:
     assert result.confidence_raw is None
 
 
+@pytest.mark.parametrize(
+    ("rsi", "status"),
+    [
+        (50, RuleStatus.PASS),
+        (70, RuleStatus.PASS),
+        (49.99, RuleStatus.FAIL),
+        (70.01, RuleStatus.FAIL),
+    ],
+)
+def test_rsi_rule_uses_inclusive_50_to_70_boundary(rsi: float, status: RuleStatus) -> None:
+    result = RuleEngine().evaluate(snapshot(rsi14=rsi))
+
+    reason = next(item for item in result.reasons if item.rule_id == "R4")
+    assert reason.status == status
+
+
+def test_conflict_has_one_risk_point_even_when_multiple_conflicts_exist() -> None:
+    result = RuleEngine().evaluate(
+        snapshot(
+            price=Decimal("110"),
+            ma20=100,
+            ma50=90,
+            macd_histogram=-1,
+            relative_return=-0.01,
+        )
+    )
+
+    assert result.risk_points == 2
+    assert result.risk_reasons.count("trend_momentum_conflict") == 1
+
+
 def test_risk_is_independent_from_signal_and_score() -> None:
     result = RuleEngine().evaluate(
         snapshot(
