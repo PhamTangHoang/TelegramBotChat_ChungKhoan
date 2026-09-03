@@ -1,0 +1,1 @@
+"""Whitelist-only Telegram delivery."""
