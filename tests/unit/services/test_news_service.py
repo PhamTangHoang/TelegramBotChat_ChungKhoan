@@ -25,7 +25,23 @@ class FakeNewsProvider:
         ]
 
 
-def _service() -> tuple[NewsService, sessionmaker]:
+class MixedNewsProvider(FakeNewsProvider):
+    def fetch(self, feed_urls: tuple[str, ...]) -> list[NewsItem]:
+        return [
+            *super().fetch(feed_urls),
+            NewsItem(
+                source="Example Source",
+                title="Unrelated steel market headline",
+                summary="A company without the requested ticker.",
+                url="https://example.test/unrelated",
+                published_at=datetime(2026, 9, 3, 3, tzinfo=UTC),
+                content_hash="b" * 64,
+                fetched_at=datetime(2026, 9, 3, 4, tzinfo=UTC),
+            ),
+        ]
+
+
+def _service(provider: object | None = None) -> tuple[NewsService, sessionmaker]:
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -39,7 +55,9 @@ def _service() -> tuple[NewsService, sessionmaker]:
         news_max_items=10,
     )
     return (
-        NewsService(provider=FakeNewsProvider(), session_factory=factory, settings=settings),
+        NewsService(
+            provider=provider or FakeNewsProvider(), session_factory=factory, settings=settings
+        ),
         factory,
     )
 
@@ -82,3 +100,13 @@ def test_news_report_refreshes_once_when_recent_cache_is_empty() -> None:
     result = service.list_recent_sync(symbol="FPT", now=now)
     assert result.status == "AVAILABLE"
     assert len(result.items) == 1
+
+
+def test_symbol_news_filters_unrelated_global_articles() -> None:
+    service, _ = _service(MixedNewsProvider())
+    now = datetime(2026, 9, 3, 5, tzinfo=UTC)
+
+    report = service.report_sync("FPT", now=now)
+
+    assert "FPT test headline" in report
+    assert "Unrelated steel market headline" not in report

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -73,6 +74,8 @@ class NewsService:
         session = self.session_factory()
         try:
             items = list(recent_news(session, since=since, symbol=symbol, limit=max_items))
+            if symbol is not None:
+                items = [item for item in items if _mentions_symbol(item, symbol)]
             status = "AVAILABLE" if items else "EMPTY"
             return NewsQueryResult(
                 items=tuple(_to_record(item) for item in items),
@@ -114,3 +117,13 @@ def _to_record(item: Any) -> NewsRecord:
         fetched_at=item.fetched_at,
         symbol=item.symbol,
     )
+
+
+def _mentions_symbol(item: Any, symbol: str) -> bool:
+    if getattr(item, "symbol", None) and item.symbol.strip().upper() == symbol:
+        return True
+    content = " ".join(
+        str(getattr(item, field, "") or "")
+        for field in ("title", "summary")
+    ).upper()
+    return re.search(rf"(?<![A-Z0-9]){re.escape(symbol)}(?![A-Z0-9])", content) is not None
