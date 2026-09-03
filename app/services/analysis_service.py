@@ -203,7 +203,15 @@ class MarketAnalysisService:
             if freshness == DataFreshness.STALE_CACHE and not self.settings.allow_stale_signal:
                 rule_result = self._stale_disallowed_result(self.settings.rule_version)
 
-            news = self._collect_news(session, symbol=symbol, as_of=as_of)
+            try:
+                news = self._collect_news(session, symbol=symbol, as_of=as_of)
+            except Exception:
+                session.rollback()
+                logger.warning(
+                    "news context unavailable; continuing technical analysis",
+                    exc_info=True,
+                )
+                news = []
             data_snapshot = build_data_snapshot(
                 market_candles=[*history, current],
                 index_candles=[*index_history, *([current_index] if current_index else [])],
