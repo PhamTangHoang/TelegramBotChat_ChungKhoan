@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     )
 
     database_url: str = "postgresql+psycopg://postgres:postgres@postgres:5432/vn_stock"
-    vnstock_source: str = "auto"
+    vnstock_source: str = "kbs"
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-2.5-flash"
     telegram_bot_token: str | None = None
@@ -82,6 +82,14 @@ class Settings(BaseSettings):
         normalized = value.strip().upper()
         if normalized not in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}:
             raise ValueError("unsupported log level")
+        return normalized
+
+    @field_validator("vnstock_source")
+    @classmethod
+    def normalize_vnstock_source(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"kbs", "vci"}:
+            raise ValueError("vnstock_source must be kbs or vci")
         return normalized
 
     @model_validator(mode="after")

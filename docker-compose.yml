@@ -18,7 +18,7 @@ services:
     build: .
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://postgres:postgres@postgres:5432/vn_stock}
-      VNSTOCK_SOURCE: ${VNSTOCK_SOURCE:-auto}
+      VNSTOCK_SOURCE: ${VNSTOCK_SOURCE:-kbs}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}

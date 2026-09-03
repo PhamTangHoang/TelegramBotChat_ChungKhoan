@@ -22,6 +22,10 @@ the v1.5 business semantics.
 - ATR14 uses Wilder/RMA smoothing, matching the RSI smoothing convention.
 - Historical bootstrap runs before live analysis and marks validated historical
   candles as finalized.
+- `vnstock==4.0.7` is called through its v4 UI API:
+  `Market().equity(symbol).ohlcv(..., source=...)` and
+  `Market().index(symbol).ohlcv(..., source=...)`; the configured source is
+  `kbs` or `vci`.
 - `analysis_runs` keeps legitimate observations; scheduler execution identity is
   tracked separately in `scheduler_runs`.
 

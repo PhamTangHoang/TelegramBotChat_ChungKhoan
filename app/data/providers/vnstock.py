@@ -39,11 +39,11 @@ class VnstockProvider(MarketDataProvider):
     ):
         def operation() -> Any:
             client = self._client_factory()
-            return client.equity.ohlcv(
-                symbol=symbol,
+            return client.equity(symbol=symbol).ohlcv(
                 start=start.isoformat(),
                 end=end.isoformat(),
                 interval="1D",
+                source=self.source,
             )
 
         rows = self._fetch(operation)
@@ -61,14 +61,11 @@ class VnstockProvider(MarketDataProvider):
     ):
         def operation() -> Any:
             client = self._client_factory()
-            index_api = client.index
-            if callable(index_api):
-                index_api = index_api(index_code)
-            return index_api.ohlcv(
-                symbol=index_code,
+            return client.index(symbol=index_code).ohlcv(
                 start=start.isoformat(),
                 end=end.isoformat(),
                 interval="1D",
+                source=self.source,
             )
 
         rows = self._fetch(operation)

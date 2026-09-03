@@ -32,8 +32,11 @@ class FakeIndex:
 
 
 class FakeClient:
-    equity = FakeEquity()
-    index = FakeIndex()
+    def equity(self, **_: object):
+        return FakeEquity()
+
+    def index(self, **_: object):
+        return FakeIndex()
 
 
 def test_vnstock_provider_normalizes_equity_and_index() -> None:
