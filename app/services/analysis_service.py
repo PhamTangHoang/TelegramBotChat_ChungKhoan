@@ -5,6 +5,7 @@ import logging
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
+from time import perf_counter
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -117,6 +118,7 @@ class MarketAnalysisService:
         trading_date = as_of.astimezone(VIETNAM_TZ).date()
         start = trading_date - timedelta(days=120)
         freshness = DataFreshness.FRESH
+        started_at = perf_counter()
 
         session = self.session_factory()
         try:
@@ -301,6 +303,11 @@ class MarketAnalysisService:
             )
         finally:
             session.close()
+            logger.info(
+                "analysis finished symbol=%s duration_ms=%.1f",
+                symbol,
+                (perf_counter() - started_at) * 1000,
+            )
 
     def _exchange_for(self, symbol: str) -> str:
         try:

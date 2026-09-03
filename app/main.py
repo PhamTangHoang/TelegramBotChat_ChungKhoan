@@ -15,6 +15,10 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     settings = get_settings()
+    logging.basicConfig(
+        level=getattr(logging, settings.log_level),
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
     scheduler = None
     bot = None
     polling_task: asyncio.Task[Any] | None = None
