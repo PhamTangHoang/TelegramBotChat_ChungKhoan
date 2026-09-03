@@ -19,7 +19,7 @@ class TechnicalAnalyzer:
         history: Sequence[MarketCandle],
         current: MarketCandle,
         index_history: Sequence[IndexCandle],
-        current_index: IndexCandle,
+        current_index: IndexCandle | None,
         elapsed_minutes: int | None = None,
         as_of: datetime | None = None,
     ) -> IndicatorSnapshot:
@@ -43,7 +43,8 @@ class TechnicalAnalyzer:
         atr14 = atr(highs, lows, closes, 14)[-1]
 
         index_by_date = {candle.trading_date: float(candle.close) for candle in index_history}
-        index_by_date[current_index.trading_date] = float(current_index.close)
+        if current_index is not None and current_index.trading_date == current.trading_date:
+            index_by_date[current_index.trading_date] = float(current_index.close)
         stock_dates = [candle.trading_date for candle in finalized] + [current.trading_date]
         aligned_index = [index_by_date.get(trading_date) for trading_date in stock_dates]
         rs = None
