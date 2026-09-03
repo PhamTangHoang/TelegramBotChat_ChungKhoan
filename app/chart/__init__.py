@@ -1,0 +1,1 @@
+"""Technical chart rendering."""
