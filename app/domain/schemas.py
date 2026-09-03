@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.domain.enums import AnalysisKind, PriceBasis
+from app.domain.enums import AnalysisKind, PriceBasis, Risk, RuleStatus, Signal
 
 
 class MarketCandle(BaseModel):
@@ -103,3 +103,27 @@ class IndicatorSnapshot(BaseModel):
     as_of: datetime
     is_final: bool
     price_basis: PriceBasis = PriceBasis.RAW_OHLCV
+
+
+class RuleReason(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    rule_id: str = Field(min_length=1, max_length=16)
+    label: str = Field(min_length=1, max_length=128)
+    status: RuleStatus
+    value: float | None = None
+    threshold: str = Field(min_length=1, max_length=128)
+
+
+class RuleResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    score: int = Field(ge=0)
+    max_score: int = Field(ge=0)
+    signal: Signal
+    confidence_raw: float | None = Field(default=None, ge=0, le=1)
+    reasons: list[RuleReason]
+    risk: Risk
+    risk_points: int = Field(ge=0)
+    risk_reasons: list[str]
+    rule_version: str = Field(min_length=1, max_length=32)
