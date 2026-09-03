@@ -17,8 +17,15 @@ def _csv_ints(value: str | tuple[int, ...] | list[int]) -> tuple[int, ...]:
     return tuple(int(item) for item in value)
 
 
+def _csv_values(value: str | tuple[str, ...] | list[str]) -> tuple[str, ...]:
+    if isinstance(value, str):
+        return tuple(item.strip() for item in value.split(",") if item.strip())
+    return tuple(str(item).strip() for item in value if str(item).strip())
+
+
 CsvStrings = Annotated[tuple[str, ...], BeforeValidator(_csv_strings)]
 CsvInts = Annotated[tuple[int, ...], BeforeValidator(_csv_ints)]
+CsvValues = Annotated[tuple[str, ...], BeforeValidator(_csv_values)]
 
 
 class Settings(BaseSettings):
@@ -40,6 +47,7 @@ class Settings(BaseSettings):
     watchlist_exchanges: CsvStrings = ("HOSE", "HOSE", "HOSE")
     market_job_interval_minutes: int = Field(default=60, ge=1, le=1440)
     news_job_interval_minutes: int = Field(default=45, ge=1, le=1440)
+    news_feed_urls: CsvValues = ()
     eod_settle_job_time: str = "15:20"
     telegram_timezone: str = "Asia/Ho_Chi_Minh"
 

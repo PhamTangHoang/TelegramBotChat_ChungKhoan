@@ -127,3 +127,16 @@ class RuleResult(BaseModel):
     risk_points: int = Field(ge=0)
     risk_reasons: list[str]
     rule_version: str = Field(min_length=1, max_length=32)
+
+
+class NewsItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source: str = Field(min_length=1, max_length=128)
+    title: str = Field(min_length=1, max_length=500)
+    summary: str | None = Field(default=None, max_length=10000)
+    url: str = Field(min_length=1, max_length=2048)
+    published_at: datetime | None = None
+    content_hash: str = Field(min_length=64, max_length=64)
+    symbol: str | None = Field(default=None, max_length=16)
+    fetched_at: datetime

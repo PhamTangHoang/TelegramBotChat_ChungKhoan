@@ -25,6 +25,7 @@ services:
       WATCHLIST_SYMBOLS: ${WATCHLIST_SYMBOLS:-FPT,VNM,HPG}
       WATCHLIST_EXCHANGES: ${WATCHLIST_EXCHANGES:-HOSE,HOSE,HOSE}
       TELEGRAM_TIMEZONE: ${TELEGRAM_TIMEZONE:-Asia/Ho_Chi_Minh}
+      NEWS_FEED_URLS: ${NEWS_FEED_URLS:-}
     depends_on:
       postgres:
         condition: service_healthy
