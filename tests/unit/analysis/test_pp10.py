@@ -40,6 +40,38 @@ def snapshot(**overrides: object) -> IndicatorSnapshot:
     return IndicatorSnapshot(**values)
 
 
+def test_pp10_evaluates_structure_criteria_when_snapshots_are_available() -> None:
+    result = PP10Evaluator().evaluate(
+        snapshot(
+            wyckoff_phase="Markup",
+            pattern_name="VCP",
+            pattern_quality=0.8,
+            pivot_price=108.0,
+            rs_rating=None,
+            rs_line_new_high=None,
+            vpvr_poc=105.0,
+            vpvr_hvn=106.0,
+            vpvr_breakout=True,
+            cpr_weekly_top=104.0,
+            cpr_weekly_bottom=100.0,
+            cpr_monthly_top=103.0,
+            cpr_monthly_bottom=99.0,
+            cpr_weekly_bullish=True,
+            cpr_monthly_bullish=True,
+            support_price=100.0,
+            resistance_price=108.0,
+        )
+    )
+
+    assert result.criteria[1].status == EvaluationStatus.PASS
+    assert result.criteria[2].status == EvaluationStatus.PASS
+    assert result.criteria[3].status == EvaluationStatus.PASS
+    assert result.criteria[6].status == EvaluationStatus.PASS
+    assert result.criteria[7].status == EvaluationStatus.PASS
+    assert result.criteria[15].status == EvaluationStatus.PASS
+    assert result.evaluated_count == 13
+
+
 def test_pp10_scores_available_deterministic_criteria_and_keeps_unknowns_explicit() -> None:
     result = PP10Evaluator().evaluate(snapshot())
 

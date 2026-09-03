@@ -14,6 +14,7 @@ from app.analysis.indicators import (
     stoch_rsi,
 )
 from app.analysis.relative_strength import relative_return
+from app.analysis.structure import analyze_structure
 from app.domain.enums import PriceBasis
 from app.domain.schemas import IndexCandle, IndicatorSnapshot, MarketCandle
 from app.market.calendar import ExchangeCalendar
@@ -100,6 +101,8 @@ class TechnicalAnalyzer:
             market_price = index_closes[-1]
             market_ma20 = sma(index_closes, 20)[-1]
             market_ma50 = sma(index_closes, 50)[-1]
+        structure = analyze_structure(finalized, current)
+        rs_line_new_high = _rs_line_new_high(closes, aligned_index)
         return IndicatorSnapshot(
             price=Decimal(current.close),
             ma20=ma20,
@@ -123,6 +126,22 @@ class TechnicalAnalyzer:
             cmf20=cmf20,
             elapsed_trading_minutes=actual_elapsed,
             relative_return=rs,
+            rs_line_new_high=rs_line_new_high,
+            wyckoff_phase=structure.wyckoff_phase,
+            pattern_name=structure.pattern_name,
+            pattern_quality=structure.pattern_quality,
+            pivot_price=structure.pivot_price,
+            support_price=structure.support_price,
+            resistance_price=structure.resistance_price,
+            vpvr_poc=structure.vpvr_poc,
+            vpvr_hvn=structure.vpvr_hvn,
+            vpvr_breakout=structure.vpvr_breakout,
+            cpr_weekly_top=structure.cpr_weekly_top,
+            cpr_weekly_bottom=structure.cpr_weekly_bottom,
+            cpr_monthly_top=structure.cpr_monthly_top,
+            cpr_monthly_bottom=structure.cpr_monthly_bottom,
+            cpr_weekly_bullish=structure.cpr_weekly_bullish,
+            cpr_monthly_bullish=structure.cpr_monthly_bullish,
             market_price=market_price,
             market_ma20=market_ma20,
             market_ma50=market_ma50,
@@ -136,3 +155,14 @@ def _fallback_as_of(candle: MarketCandle) -> datetime:
     if candle.provider_timestamp is not None:
         return candle.provider_timestamp
     return datetime.combine(candle.trading_date, time(0, 0))
+
+
+def _rs_line_new_high(closes: Sequence[float], index_closes: Sequence[float | None]) -> bool | None:
+    ratios = [
+        stock / index
+        for stock, index in zip(closes, index_closes, strict=True)
+        if index is not None and index > 0
+    ]
+    if len(ratios) < 21:
+        return None
+    return ratios[-1] >= max(ratios[-21:])

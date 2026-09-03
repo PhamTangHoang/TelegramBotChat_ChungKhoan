@@ -41,12 +41,21 @@ class PP10Evaluator:
             self._unsupported(criterion_id, name) for criterion_id, name in _CRITERIA
         ]
         criteria[0] = self._trend(indicators)
+        criteria[1] = self._wyckoff(indicators)
+        criteria[2] = self._pattern(indicators)
+        criteria[3] = self._pattern_quality(indicators)
+        criteria[4] = self._relative_strength(indicators)
         criteria[5] = self._volume(indicators)
+        criteria[6] = self._vpvr(indicators)
+        criteria[7] = self._cpr(indicators)
         criteria[8] = self._money_flow(indicators)
         criteria[9] = self._macd(indicators)
         criteria[10] = self._rsi_adx(indicators)
         criteria[11] = self._stoch_rsi(indicators)
+        criteria[12] = self._fundamentals(indicators)
+        criteria[13] = self._valuation(indicators)
         criteria[14] = self._market(indicators)
+        criteria[15], risk_plan = self._position(indicators)
 
         evaluated = [
             item
@@ -67,13 +76,7 @@ class PP10Evaluator:
             confidence=confidence,
             version=self.version,
             criteria=criteria,
-            risk_plan=PP10RiskPlan(
-                entry_zone="Chưa xác định — chưa có cấu trúc breakout được đánh giá",
-                add_zone="Chưa xác định",
-                stop_loss="Chưa xác định — cần swing low hoặc hỗ trợ hợp lệ",
-                target="Chưa xác định — cần kháng cự/cấu trúc giá",
-                risk_reward="Chưa xác định",
-            ),
+            risk_plan=risk_plan,
         )
 
     @staticmethod
@@ -161,6 +164,139 @@ class PP10Evaluator:
             ),
         )
 
+    def _wyckoff(self, indicators: IndicatorSnapshot) -> PP10Criterion:
+        phase = indicators.wyckoff_phase
+        if phase is None:
+            return self._unsupported("2", "Pha Wyckoff")
+        passed = phase in {"Accumulation", "Markup"}
+        return self._criterion(
+            "2",
+            "Pha Wyckoff",
+            passed,
+            value=phase,
+            threshold="Accumulation hoặc Markup",
+            reason=(
+                "Heuristic xác định pha tích lũy/markup."
+                if passed
+                else "Heuristic chưa xác định pha thuận lợi."
+            ),
+            data_source="validated_ohlcv_heuristic",
+        )
+
+    def _pattern(self, indicators: IndicatorSnapshot) -> PP10Criterion:
+        pattern = indicators.pattern_name
+        quality = indicators.pattern_quality
+        if pattern is None or quality is None:
+            return self._unsupported("3", "Mẫu hình Dan Zanger")
+        passed = pattern != "No clear pattern" and quality >= 0.7
+        return self._criterion(
+            "3",
+            "Mẫu hình Dan Zanger",
+            passed,
+            value={"pattern": pattern, "quality": quality},
+            threshold="Mẫu hình rõ ràng và quality >= 0.70",
+            reason=(
+                f"Đã nhận diện heuristic mẫu hình {pattern}."
+                if passed
+                else "Chưa có mẫu hình đủ rõ theo ngưỡng heuristic."
+            ),
+            data_source="validated_ohlcv_heuristic",
+        )
+
+    def _pattern_quality(self, indicators: IndicatorSnapshot) -> PP10Criterion:
+        quality = indicators.pattern_quality
+        if quality is None:
+            return self._unsupported("4", "Chất lượng mẫu hình theo Peter Brandt")
+        passed = quality >= 0.7 and indicators.pivot_price is not None
+        return self._criterion(
+            "4",
+            "Chất lượng mẫu hình theo Peter Brandt",
+            passed,
+            value={"quality": quality, "pivot": indicators.pivot_price},
+            threshold="Quality >= 0.70 và có pivot",
+            reason=(
+                "Mẫu hình có pivot và chất lượng heuristic đạt ngưỡng."
+                if passed
+                else "Mẫu hình chưa đạt chất lượng hoặc thiếu pivot."
+            ),
+            data_source="validated_ohlcv_heuristic",
+        )
+
+    def _relative_strength(self, indicators: IndicatorSnapshot) -> PP10Criterion:
+        if indicators.rs_rating is None or indicators.rs_line_new_high is None:
+            return self._unsupported("5", "RS Rating và RS Line")
+        passed = indicators.rs_rating >= 80 and indicators.rs_line_new_high
+        return self._criterion(
+            "5",
+            "RS Rating và RS Line",
+            passed,
+            value={
+                "rating": indicators.rs_rating,
+                "new_high": indicators.rs_line_new_high,
+            },
+            threshold="RS Rating >= 80 và RS Line tạo đỉnh mới",
+            reason=(
+                "RS Rating và RS Line cùng xác nhận."
+                if passed
+                else "RS Rating hoặc RS Line chưa đạt ngưỡng."
+            ),
+            data_source="market_universe_relative_strength",
+        )
+
+    def _vpvr(self, indicators: IndicatorSnapshot) -> PP10Criterion:
+        values = (indicators.vpvr_poc, indicators.vpvr_hvn, indicators.vpvr_breakout)
+        if any(value is None for value in values):
+            return self._unsupported("7", "Volume Profile / VPVR")
+        passed = indicators.vpvr_breakout is True
+        return self._criterion(
+            "7",
+            "Volume Profile / VPVR",
+            passed,
+            value={"poc": indicators.vpvr_poc, "hvn": indicators.vpvr_hvn},
+            threshold="Giá vượt vùng POC/HVN",
+            reason=(
+                "Giá đã vượt vùng volume node heuristic."
+                if passed
+                else "Giá chưa vượt vùng volume node heuristic."
+            ),
+            data_source="validated_ohlcv_vpvr_approximation",
+        )
+
+    def _cpr(self, indicators: IndicatorSnapshot) -> PP10Criterion:
+        values = (
+            indicators.cpr_weekly_top,
+            indicators.cpr_weekly_bottom,
+            indicators.cpr_monthly_top,
+            indicators.cpr_monthly_bottom,
+            indicators.cpr_weekly_bullish,
+            indicators.cpr_monthly_bullish,
+        )
+        if any(value is None for value in values):
+            return self._unsupported("8", "CPR tuần và tháng")
+        price = float(indicators.price)
+        passed = (
+            price > indicators.cpr_weekly_top
+            and price > indicators.cpr_monthly_top
+            and indicators.cpr_weekly_bullish
+            and indicators.cpr_monthly_bullish
+        )
+        return self._criterion(
+            "8",
+            "CPR tuần và tháng",
+            passed,
+            value={
+                "weekly_top": indicators.cpr_weekly_top,
+                "monthly_top": indicators.cpr_monthly_top,
+            },
+            threshold="Giá trên CPR tuần/tháng và CPR hướng tăng",
+            reason=(
+                "Giá và hướng CPR cùng xác nhận tăng."
+                if passed
+                else "CPR chưa đồng thời xác nhận tăng."
+            ),
+            data_source="validated_ohlcv_cpr",
+        )
+
     def _money_flow(self, indicators: IndicatorSnapshot) -> PP10Criterion:
         if indicators.cmf20 is None or indicators.obv_change_5 is None:
             return self._unsupported("9", "OBV và CMF")
@@ -240,6 +376,92 @@ class PP10Evaluator:
             ),
         )
 
+    def _fundamentals(self, indicators: IndicatorSnapshot) -> PP10Criterion:
+        values = (
+            indicators.revenue_growth,
+            indicators.earnings_growth,
+            indicators.eps_growth,
+            indicators.roe,
+        )
+        if any(value is None for value in values):
+            return self._unsupported("13", "Cơ bản doanh nghiệp")
+        passed = all(value > 0 for value in values)
+        return self._criterion(
+            "13",
+            "Cơ bản doanh nghiệp",
+            passed,
+            value={
+                "revenue": indicators.revenue_growth,
+                "earnings": indicators.earnings_growth,
+                "eps": indicators.eps_growth,
+                "roe": indicators.roe,
+            },
+            threshold="Doanh thu, lợi nhuận, EPS và ROE tăng",
+            reason=(
+                "Các chỉ số cơ bản chính cùng tăng."
+                if passed
+                else "Một hoặc nhiều chỉ số cơ bản chưa tăng."
+            ),
+            data_source="fundamental_provider",
+        )
+
+    def _valuation(self, indicators: IndicatorSnapshot) -> PP10Criterion:
+        values = (
+            indicators.pe,
+            indicators.pb,
+            indicators.sector_pe,
+            indicators.sector_pb,
+            indicators.historical_pe,
+            indicators.historical_pb,
+        )
+        if any(value is None for value in values):
+            return self._unsupported("14", "Định giá")
+        passed = (
+            indicators.pe <= indicators.sector_pe
+            and indicators.pb <= indicators.sector_pb
+            and indicators.pe <= indicators.historical_pe * 1.2
+            and indicators.pb <= indicators.historical_pb * 1.2
+        )
+        return self._criterion(
+            "14",
+            "Định giá",
+            passed,
+            value={"pe": indicators.pe, "pb": indicators.pb},
+            threshold="P/E và P/B không cao hơn ngành/lịch sử quá 20%",
+            reason=(
+                "Định giá nằm trong ngưỡng so sánh."
+                if passed
+                else "Định giá đang cao hơn ngưỡng so sánh."
+            ),
+            data_source="fundamental_provider",
+        )
+
+    def _position(self, indicators: IndicatorSnapshot) -> tuple[PP10Criterion, PP10RiskPlan]:
+        pivot = indicators.pivot_price
+        support = indicators.support_price
+        atr = indicators.atr14
+        if pivot is None or support is None or atr is None or indicators.pattern_quality is None:
+            return self._unsupported("16", "Quản trị vị thế"), _unavailable_risk_plan()
+        stop = max(0.01, support - atr * 0.5)
+        target = pivot + (pivot - stop) * 2
+        risk = max(0.01, pivot - stop)
+        plan = PP10RiskPlan(
+            entry_zone=f"{pivot * 0.98:.2f}–{pivot * 1.02:.2f} (tham chiếu)",
+            add_zone=f"Trên {pivot * 1.02:.2f} khi breakout được xác nhận",
+            stop_loss=f"Dưới {stop:.2f} hoặc dưới cấu trúc hỗ trợ",
+            target=f"Khoảng {target:.2f} theo R:R 2:1",
+            risk_reward=f"1:{(target - pivot) / risk:.1f}",
+        )
+        return self._criterion(
+            "16",
+            "Quản trị vị thế",
+            True,
+            value={"pivot": pivot, "support": support, "atr": atr},
+            threshold="Có pivot, hỗ trợ và ATR để lập kế hoạch",
+            reason="Đã lập kế hoạch tham chiếu theo cấu trúc và ATR.",
+            data_source="validated_ohlcv_structure",
+        ), plan
+
     def _market(self, indicators: IndicatorSnapshot) -> PP10Criterion:
         values = (indicators.market_price, indicators.market_ma20, indicators.market_ma50)
         if any(value is None for value in values):
@@ -273,3 +495,13 @@ class PP10Evaluator:
         if evaluated_count >= 10 and ratio >= 0.60:
             return "B"
         return "C"
+
+
+def _unavailable_risk_plan() -> PP10RiskPlan:
+    return PP10RiskPlan(
+        entry_zone="Chưa xác định — chưa có cấu trúc breakout được đánh giá",
+        add_zone="Chưa xác định",
+        stop_loss="Chưa xác định — cần swing low hoặc hỗ trợ hợp lệ",
+        target="Chưa xác định — cần kháng cự/cấu trúc giá",
+        risk_reward="Chưa xác định",
+    )

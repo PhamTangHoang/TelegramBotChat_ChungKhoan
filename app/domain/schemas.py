@@ -119,6 +119,36 @@ class IndicatorSnapshot(BaseModel):
     cmf20: float | None = None
     elapsed_trading_minutes: int = Field(ge=0)
     relative_return: float | None = None
+    rs_rating: float | None = Field(default=None, ge=0, le=100)
+    rs_line_new_high: bool | None = None
+    wyckoff_phase: str | None = None
+    pattern_name: str | None = None
+    pattern_quality: float | None = Field(default=None, ge=0, le=1)
+    pivot_price: float | None = None
+    support_price: float | None = None
+    resistance_price: float | None = None
+    vpvr_poc: float | None = None
+    vpvr_hvn: float | None = None
+    vpvr_breakout: bool | None = None
+    cpr_weekly_top: float | None = None
+    cpr_weekly_bottom: float | None = None
+    cpr_monthly_top: float | None = None
+    cpr_monthly_bottom: float | None = None
+    cpr_weekly_bullish: bool | None = None
+    cpr_monthly_bullish: bool | None = None
+    revenue_growth: float | None = None
+    earnings_growth: float | None = None
+    eps_growth: float | None = None
+    roe: float | None = None
+    nim: float | None = None
+    casa: float | None = None
+    asset_quality: float | None = None
+    pe: float | None = Field(default=None, gt=0)
+    pb: float | None = Field(default=None, gt=0)
+    sector_pe: float | None = Field(default=None, gt=0)
+    sector_pb: float | None = Field(default=None, gt=0)
+    historical_pe: float | None = Field(default=None, gt=0)
+    historical_pb: float | None = Field(default=None, gt=0)
     market_price: float | None = None
     market_ma20: float | None = None
     market_ma50: float | None = None
