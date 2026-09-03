@@ -11,6 +11,8 @@ the v1.5 business semantics.
 - `R6` is `NOT_EVALUATED` before 15 regular trading minutes.
 - Real credentials are supplied by the user later through an untracked `.env`.
 - External data and LLM output are untrusted and are validated at boundaries.
+- Telegram access is private by default; `TELEGRAM_PUBLIC_ACCESS=true` explicitly
+  enables all-chat access while retaining the per-chat rate limit.
 
 ## Explicit MVP policies
 

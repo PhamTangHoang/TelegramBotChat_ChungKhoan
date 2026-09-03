@@ -11,11 +11,12 @@ class AccessDenied(PermissionError):
 
 
 class WhitelistAccessController:
-    def __init__(self, allowed_chat_ids: Iterable[int]) -> None:
+    def __init__(self, allowed_chat_ids: Iterable[int], *, public_access: bool = False) -> None:
         self.allowed_chat_ids = frozenset(allowed_chat_ids)
+        self.public_access = public_access
 
     def check(self, chat_id: int) -> None:
-        if chat_id not in self.allowed_chat_ids:
+        if not self.public_access and chat_id not in self.allowed_chat_ids:
             raise AccessDenied("chat_id is not allowlisted")
 
 

@@ -1,6 +1,6 @@
 # VN Stock Analyst Bot
 
-Private Telegram bot for deterministic technical analysis of Vietnamese stocks.
+Configurable Telegram bot for deterministic technical analysis of Vietnamese stocks.
 The Rule Engine owns the primary signal; Gemini is an explanation layer only.
 
 ## Quick start
@@ -20,7 +20,8 @@ ready to run live provider, Gemini, Telegram and end-to-end tests.
 Copy `.env.example` to `.env`, then supply at least:
 
 - `TELEGRAM_BOT_TOKEN`
-- `TELEGRAM_ALLOWED_CHAT_IDS` (comma-separated numeric chat IDs)
+- `TELEGRAM_PUBLIC_ACCESS=true` to allow all Telegram chats, or
+  `TELEGRAM_ALLOWED_CHAT_IDS` (comma-separated numeric chat IDs) for whitelist mode
 - `GEMINI_API_KEY` (optional; technical report works without it)
 - `NEWS_FEED_URLS` (optional comma-separated RSS URLs)
 
@@ -30,6 +31,8 @@ Never put secrets in source files or commit `.env`.
 
 Docker Desktop must be running before `docker compose up`. The app starts in
 health-only mode when `TELEGRAM_BOT_TOKEN` is empty.
+Public access keeps the per-chat rate limit but allows any Telegram user or group
+to call the bot. Use whitelist mode when the bot should remain private.
 
 ## Development commands
 
@@ -42,7 +45,7 @@ docker compose logs --tail=200 app
 
 ## Scope
 
-This is a private/personal analysis aid, not an investment recommendation service.
+This is a configurable analysis aid, not an investment recommendation service.
 Reports must retain the disclaimer and must not present `confidence_raw` as a
 probability before backtesting.
 

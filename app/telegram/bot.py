@@ -17,6 +17,7 @@ def create_dispatcher(settings: Settings, service: TelegramAnalysisService) -> t
         build_router(
             service,
             allowed_chat_ids=settings.telegram_allowed_chat_ids,
+            public_access=settings.telegram_public_access,
             rate_limit_per_minute=settings.telegram_rate_limit_per_min,
         )
     )

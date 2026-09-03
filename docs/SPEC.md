@@ -2,10 +2,13 @@
 
 ## Objective
 
-Build a private, whitelist-only Telegram bot that collects Vietnamese market data,
+Build a configurable Telegram bot that collects Vietnamese market data,
 validates and stores it, computes deterministic technical indicators, produces a
 versioned signal/risk result, audits the exact inputs, optionally asks Gemini for
 explanation, and delivers a technical report and chart.
+
+Telegram access is private whitelist mode by default and can be explicitly
+switched to public mode with `TELEGRAM_PUBLIC_ACCESS=true`.
 
 ## Non-negotiable boundaries
 

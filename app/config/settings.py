@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-2.5-flash"
     telegram_bot_token: str | None = None
+    telegram_public_access: bool = False
     telegram_allowed_chat_ids: CsvInts = Field(default_factory=tuple)
     telegram_rate_limit_per_min: int = Field(default=5, ge=1, le=1000)
 

@@ -28,6 +28,7 @@ def build_router(
     service: TelegramAnalysisService,
     *,
     allowed_chat_ids: tuple[int, ...],
+    public_access: bool = False,
     rate_limit_per_minute: int,
 ):
     """Build aiogram handlers without importing aiogram during unit-only imports."""
@@ -36,7 +37,7 @@ def build_router(
     from aiogram.types import Message
 
     router = Router()
-    access = WhitelistAccessController(allowed_chat_ids)
+    access = WhitelistAccessController(allowed_chat_ids, public_access=public_access)
     limiter = RateLimiter(rate_limit_per_minute)
 
     async def authorized(message: Message) -> bool:

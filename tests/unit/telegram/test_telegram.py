@@ -13,6 +13,7 @@ def test_whitelist_and_rate_limit_are_independent() -> None:
     WhitelistAccessController([123]).check(123)
     with pytest.raises(AccessDenied):
         WhitelistAccessController([123]).check(456)
+    WhitelistAccessController([], public_access=True).check(456)
 
     now = [0.0]
     limiter = RateLimiter(2, clock=lambda: now[0])

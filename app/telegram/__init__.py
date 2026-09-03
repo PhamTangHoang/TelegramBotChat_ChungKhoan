@@ -1,1 +1,1 @@
-"""Whitelist-only Telegram delivery."""
+"""Configurable Telegram delivery with whitelist and public access modes."""

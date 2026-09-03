@@ -4,6 +4,7 @@ from app.config.settings import Settings
 def test_settings_parse_watchlist_and_allowed_chat_ids() -> None:
     settings = Settings(
         database_url="sqlite+pysqlite:///:memory:",
+        _env_file=None,
         watchlist_symbols=" fpt, VNM ",
         watchlist_exchanges="HOSE,HOSE",
         telegram_allowed_chat_ids="123, -456",
@@ -14,8 +15,10 @@ def test_settings_parse_watchlist_and_allowed_chat_ids() -> None:
     assert settings.telegram_allowed_chat_ids == (123, -456)
 
 
-def test_settings_accepts_missing_live_credentials_for_local_development() -> None:
-    settings = Settings(database_url="sqlite+pysqlite:///:memory:")
+def test_settings_accepts_missing_live_credentials_for_local_development(monkeypatch) -> None:
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
+    settings = Settings(database_url="sqlite+pysqlite:///:memory:", _env_file=None)
 
     assert settings.gemini_api_key is None
     assert settings.telegram_bot_token is None
@@ -24,9 +27,20 @@ def test_settings_accepts_missing_live_credentials_for_local_development() -> No
 def test_settings_normalizes_blank_live_credentials() -> None:
     settings = Settings(
         database_url="sqlite+pysqlite:///:memory:",
+        _env_file=None,
         gemini_api_key=" ",
         telegram_bot_token="",
     )
 
     assert settings.gemini_api_key is None
     assert settings.telegram_bot_token is None
+
+
+def test_settings_supports_public_telegram_access() -> None:
+    settings = Settings(
+        database_url="sqlite+pysqlite:///:memory:",
+        _env_file=None,
+        telegram_public_access=True,
+    )
+
+    assert settings.telegram_public_access is True
