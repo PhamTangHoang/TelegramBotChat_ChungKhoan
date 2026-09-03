@@ -156,6 +156,13 @@ class MarketAnalysisService:
             current = self._current_candle(market_rows, trading_date)
             if current is None:
                 raise AnalysisUnavailable("provider returned no current market candle")
+            if (
+                not is_final
+                and freshness == DataFreshness.FRESH
+                and self.calendar.is_regular_trading_time(as_of)
+                and current.trading_date != trading_date
+            ):
+                raise AnalysisUnavailable("provider returned no intraday candle for today")
             history = get_finalized_history(
                 session,
                 symbol=symbol,
