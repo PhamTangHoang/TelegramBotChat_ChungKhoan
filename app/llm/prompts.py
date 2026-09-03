@@ -4,7 +4,7 @@ from typing import Any
 
 from app.audit.snapshot import canonical_json
 
-PROMPT_VERSION = "1.0.0"
+PROMPT_VERSION = "1.1.0"
 
 SYSTEM_INSTRUCTION = """You explain a precomputed Vietnamese stock technical analysis.
 The Rule Engine is authoritative. Do not recalculate indicators, change the signal,

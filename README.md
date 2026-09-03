@@ -41,6 +41,10 @@ Supported commands and natural-language shortcuts include `/analyze FPT` or
 PP10Ulti checklist; News is deliberately kept separate from its score.
 Other plain-text messages are answered by Gemini when `GEMINI_API_KEY` is set.
 
+PP10 criteria that need a market-universe RS ranking or sector valuation
+comparison are shown as `DATA_UNAVAILABLE` until those datasets are configured;
+the bot does not fabricate those values.
+
 ## Development commands
 
 ```powershell

@@ -44,3 +44,9 @@ def test_settings_supports_public_telegram_access() -> None:
     )
 
     assert settings.telegram_public_access is True
+
+
+def test_settings_exposes_pp10_version() -> None:
+    settings = Settings(database_url="sqlite+pysqlite:///:memory:", _env_file=None)
+
+    assert settings.pp10_version == "1.1.0"

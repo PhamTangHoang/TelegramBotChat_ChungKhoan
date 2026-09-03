@@ -64,7 +64,8 @@ class Settings(BaseSettings):
     allow_stale_signal: bool = False
 
     rule_version: str = "1.5.0"
-    prompt_version: str = "1.0.0"
+    pp10_version: str = "1.1.0"
+    prompt_version: str = "1.1.0"
     data_schema_version: str = "1.0.0"
     calendar_version: str = "HOSE_2026"
     log_level: str = "INFO"

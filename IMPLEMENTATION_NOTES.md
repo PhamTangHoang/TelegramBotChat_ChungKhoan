@@ -17,12 +17,17 @@ the v1.5 business semantics.
   deterministic services; other plain text uses Gemini as a conversational layer
   and never owns a stock signal.
 - `WATCHLIST_SYMBOLS` controls scheduled refreshes; on-demand Telegram analysis
-  accepts additional HOSE symbols and uses HOSE as the default exchange.
+  accepts additional listed symbols, resolves HOSE/HNX/UPCOM from vnstock when
+  possible, and falls back to HOSE only when the listing lookup is unavailable.
 - Gemini's Pydantic response schema is sanitized to remove unsupported
   `additionalProperties` fields before it is sent to the API.
-- The vnstock KBS index adapter keeps the last row when the provider emits
-  duplicate VNINDEX dates and logs the event; duplicate equity dates remain a
-  hard provider-schema failure.
+- The vnstock adapter keeps the last row when the provider emits duplicate
+  VNINDEX or equity dates and logs the event, so a duplicate provider row does
+  not make an otherwise valid symbol unavailable.
+- PP10Ulti evaluates every criterion deterministically when its required data is
+  available. Criteria that require a market-universe RS ranking or sector
+  valuation dataset remain explicitly `DATA_UNAVAILABLE` until those providers
+  are added.
 - Telegram exposes one analysis command, `/analyze SYMBOL`, which combines the
   v1.5 technical rules with the deterministic PP10Ulti evaluator. `/news SYMBOL`
   is a separate cached RSS report and never changes the analysis score.
