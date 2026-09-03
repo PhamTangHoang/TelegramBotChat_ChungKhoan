@@ -23,6 +23,7 @@ async def lifespan(_: FastAPI):
             from app.data.providers.rss import RssProvider
             from app.data.providers.vnstock import VnstockProvider
             from app.database.connection import SessionLocal
+            from app.llm.gemini import GeminiExplainer
             from app.scheduler.scheduler import SchedulerService
             from app.services.analysis_service import MarketAnalysisService
             from app.telegram.bot import create_dispatcher
@@ -33,6 +34,14 @@ async def lifespan(_: FastAPI):
                 session_factory=SessionLocal,
                 calendar=calendar,
                 settings=settings,
+                gemini=(
+                    GeminiExplainer(
+                        api_key=settings.gemini_api_key,
+                        model=settings.gemini_model,
+                    )
+                    if settings.gemini_api_key
+                    else None
+                ),
                 news_provider=RssProvider(),
             )
             scheduler_service = SchedulerService(

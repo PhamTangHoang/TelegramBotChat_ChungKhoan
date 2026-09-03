@@ -135,6 +135,9 @@ class MarketAnalysisService:
                 self._persist_market(session, market_rows, is_final=is_final)
                 self._persist_index(session, index_rows, is_final=is_final)
                 session.commit()
+            except AnalysisUnavailable:
+                session.rollback()
+                raise
             except Exception:
                 session.rollback()
                 if not self.settings.allow_stale_signal:

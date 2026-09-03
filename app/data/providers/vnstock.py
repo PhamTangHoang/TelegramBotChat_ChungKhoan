@@ -13,11 +13,14 @@ class VnstockProvider(MarketDataProvider):
     def __init__(
         self,
         *,
-        source: str = "auto",
+        source: str = "kbs",
         client_factory: Callable[[], Any] | None = None,
         breaker: CircuitBreaker | None = None,
     ) -> None:
-        self.source = source
+        normalized_source = source.strip().lower()
+        if normalized_source not in {"kbs", "vci"}:
+            raise ValueError("vnstock source must be kbs or vci")
+        self.source = normalized_source
         self._client_factory = client_factory or self._default_client
         self._breaker = breaker or CircuitBreaker()
 
