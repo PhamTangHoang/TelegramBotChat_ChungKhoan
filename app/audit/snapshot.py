@@ -17,15 +17,15 @@ def canonicalize(value: Any) -> Any:
         return canonicalize(value.model_dump(mode="python"))
     if isinstance(value, Enum):
         return canonicalize(value.value)
-    if isinstance(value, (datetime, date)):
+    if isinstance(value, datetime | date):
         return value.isoformat()
     if isinstance(value, Decimal):
         return format(value, "f")
     if isinstance(value, Mapping):
         return {str(key): canonicalize(item) for key, item in value.items()}
-    if isinstance(value, (str, int, float, bool)) or value is None:
+    if isinstance(value, str | int | float | bool) or value is None:
         return value
-    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+    if isinstance(value, Sequence) and not isinstance(value, str | bytes | bytearray):
         return [canonicalize(item) for item in value]
     raise TypeError(f"unsupported value for canonical JSON: {type(value).__name__}")
 
