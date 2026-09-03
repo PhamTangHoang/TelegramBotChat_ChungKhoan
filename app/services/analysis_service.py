@@ -345,8 +345,9 @@ class MarketAnalysisService:
     def _exchange_for(self, symbol: str) -> str:
         try:
             index = self.settings.watchlist_symbols.index(symbol)
-        except ValueError as exc:
-            raise AnalysisUnavailable(f"symbol is not in watchlist: {symbol}") from exc
+        except ValueError:
+            logger.info("symbol=%s is outside watchlist; using default HOSE exchange", symbol)
+            return "HOSE"
         return self.settings.watchlist_exchanges[index]
 
     def _cache_is_fresh(

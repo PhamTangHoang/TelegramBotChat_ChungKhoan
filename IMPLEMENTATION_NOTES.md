@@ -16,6 +16,10 @@ the v1.5 business semantics.
 - Natural-language Telegram shortcuts route analysis/chart/market requests to
   deterministic services; other plain text uses Gemini as a conversational layer
   and never owns a stock signal.
+- `WATCHLIST_SYMBOLS` controls scheduled refreshes; on-demand Telegram analysis
+  accepts additional HOSE symbols and uses HOSE as the default exchange.
+- Gemini's Pydantic response schema is sanitized to remove unsupported
+  `additionalProperties` fields before it is sent to the API.
 
 ## Explicit MVP policies
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from copy import deepcopy
 from typing import Any
 
 from app.domain.enums import Signal
@@ -8,6 +9,23 @@ from app.llm.prompts import build_chat_prompt, build_prompt
 from app.llm.schemas import GeminiExplanation
 
 logger = logging.getLogger(__name__)
+
+
+def _gemini_response_schema() -> dict[str, Any]:
+    schema = deepcopy(GeminiExplanation.model_json_schema())
+    return _remove_unsupported_schema_fields(schema)
+
+
+def _remove_unsupported_schema_fields(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: _remove_unsupported_schema_fields(item)
+            for key, item in value.items()
+            if key != "additionalProperties"
+        }
+    if isinstance(value, list):
+        return [_remove_unsupported_schema_fields(item) for item in value]
+    return value
 
 
 class GeminiError(RuntimeError):
@@ -53,7 +71,7 @@ class GeminiExplainer:
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json",
-                    response_schema=GeminiExplanation.model_json_schema(),
+                    response_schema=_gemini_response_schema(),
                     temperature=0.2,
                 ),
             )

@@ -47,6 +47,7 @@ def test_gemini_uses_structured_schema_and_validates_response() -> None:
     config = models.calls[0]["config"]
     assert config.response_mime_type == "application/json"
     assert config.response_schema["title"] == "GeminiExplanation"
+    assert "additionalProperties" not in config.response_schema
 
 
 def test_invalid_gemini_response_is_recoverable() -> None:

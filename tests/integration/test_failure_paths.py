@@ -222,3 +222,21 @@ def test_final_run_rejects_provider_data_without_today() -> None:
 
     with Session(engine) as db:
         assert db.scalar(select(AnalysisRun)) is None
+
+
+def test_symbol_outside_scheduler_watchlist_defaults_to_hose() -> None:
+    engine, factory = database()
+    service = MarketAnalysisService(
+        provider=CompleteProvider(),
+        session_factory=factory,
+        calendar=HOSECalendar(),
+        settings=settings(allow_stale_signal=False),
+    )
+
+    output = service.run_sync(
+        "VCB",
+        now=datetime(2026, 8, 20, 10, tzinfo=ZoneInfo("Asia/Ho_Chi_Minh")),
+        include_gemini=False,
+    )
+
+    assert output.symbol == "VCB"
