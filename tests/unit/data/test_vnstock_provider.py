@@ -106,6 +106,14 @@ class EmptyEquityClient(FakeClient):
         return EmptyEquity()
 
 
+class FakeListing:
+    def symbols_by_exchange(self, **_: object):
+        return [
+            {"symbol": "ACB", "exchange": "HNX"},
+            {"symbol": "FPT", "exchange": "HOSE"},
+        ]
+
+
 def test_vnstock_provider_normalizes_equity_and_index() -> None:
     provider = VnstockProvider(client_factory=lambda: FakeClient())
 
@@ -147,3 +155,14 @@ def test_vnstock_provider_classifies_empty_symbol_data() -> None:
 
     with pytest.raises(NoMarketDataError, match="FEE"):
         provider.get_ohlcv("FEE", date(2026, 9, 1), date(2026, 9, 3))
+
+
+def test_vnstock_provider_resolves_exchange_for_on_demand_symbol() -> None:
+    provider = VnstockProvider(
+        client_factory=lambda: FakeClient(),
+        listing_factory=lambda **_: FakeListing(),
+    )
+
+    assert provider.resolve_exchange("ACB") == "HNX"
+    assert provider.resolve_exchange("FPT") == "HOSE"
+    assert provider.resolve_exchange("UNKNOWN") is None

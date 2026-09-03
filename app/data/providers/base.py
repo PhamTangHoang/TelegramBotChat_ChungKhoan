@@ -7,7 +7,13 @@ from app.domain.schemas import IndexCandle, MarketCandle
 
 class MarketDataProvider(Protocol):
     def get_ohlcv(
-        self, symbol: str, start: date, end: date, *, is_final: bool = False
+        self,
+        symbol: str,
+        start: date,
+        end: date,
+        *,
+        exchange: str = "HOSE",
+        is_final: bool = False,
     ) -> Sequence[MarketCandle]: ...
 
     def get_market_index(

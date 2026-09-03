@@ -206,9 +206,20 @@ class MarketAnalysisService:
                 index_rows = get_index_candles(session, index_code="VNINDEX")
             else:
                 try:
-                    market_rows = list(
-                        self.provider.get_ohlcv(symbol, start, trading_date, is_final=is_final)
-                    )
+                    if callable(getattr(self.provider, "resolve_exchange", None)):
+                        market_rows = list(
+                            self.provider.get_ohlcv(
+                                symbol,
+                                start,
+                                trading_date,
+                                exchange=exchange,
+                                is_final=is_final,
+                            )
+                        )
+                    else:
+                        market_rows = list(
+                            self.provider.get_ohlcv(symbol, start, trading_date, is_final=is_final)
+                        )
                     index_rows = list(
                         self.provider.get_market_index(
                             "VNINDEX", start, trading_date, is_final=is_final
@@ -403,6 +414,16 @@ class MarketAnalysisService:
         try:
             index = self.settings.watchlist_symbols.index(symbol)
         except ValueError:
+            resolver = getattr(self.provider, "resolve_exchange", None)
+            if callable(resolver):
+                try:
+                    exchange = resolver(symbol)
+                except Exception:
+                    logger.warning("exchange lookup failed for symbol=%s", symbol, exc_info=True)
+                else:
+                    if exchange:
+                        logger.info("symbol=%s resolved to exchange=%s", symbol, exchange)
+                        return exchange
             logger.info("symbol=%s is outside watchlist; using default HOSE exchange", symbol)
             return "HOSE"
         return self.settings.watchlist_exchanges[index]

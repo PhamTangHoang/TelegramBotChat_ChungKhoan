@@ -19,6 +19,7 @@ class VnstockProvider(MarketDataProvider):
         *,
         source: str = "kbs",
         client_factory: Callable[[], Any] | None = None,
+        listing_factory: Callable[..., Any] | None = None,
         breaker: CircuitBreaker | None = None,
     ) -> None:
         normalized_source = source.strip().lower()
@@ -26,7 +27,10 @@ class VnstockProvider(MarketDataProvider):
             raise ValueError("vnstock source must be kbs or vci")
         self.source = normalized_source
         self._client_factory = client_factory or self._default_client
+        self._listing_factory = listing_factory or self._default_listing
         self._breaker = breaker or CircuitBreaker()
+        self._exchange_cache: dict[str, str] = {}
+        self._listing_loaded = False
 
     @staticmethod
     def _default_client() -> Any:
@@ -38,11 +42,26 @@ class VnstockProvider(MarketDataProvider):
             ) from exc
         return Market()
 
+    def _default_listing(self, **_: Any) -> Any:
+        try:
+            from vnstock import Listing
+        except ImportError as exc:
+            raise ProviderSchemaError(
+                "vnstock Listing is not installed; install the pinned production dependency"
+            ) from exc
+        return Listing(source=self.source, show_log=False)
+
     def _fetch(self, operation: Callable[[], Any]) -> Any:
         return self._breaker.call(lambda: retry_call(operation))
 
     def get_ohlcv(
-        self, symbol: str, start: date, end: date, *, is_final: bool = False
+        self,
+        symbol: str,
+        start: date,
+        end: date,
+        *,
+        exchange: str = "HOSE",
+        is_final: bool = False,
     ):
         def operation() -> Any:
             client = self._client_factory()
@@ -63,11 +82,37 @@ class VnstockProvider(MarketDataProvider):
         return normalize_ohlcv(
             rows,
             symbol=symbol,
-            exchange="HOSE",
+            exchange=exchange,
             source="vnstock",
             is_final=is_final,
             volume_semantics="daily_total" if is_final else "regular_cumulative",
         )
+
+    def resolve_exchange(self, symbol: str) -> str | None:
+        normalized_symbol = symbol.strip().upper()
+        if normalized_symbol in self._exchange_cache:
+            return self._exchange_cache[normalized_symbol]
+        if self._listing_loaded:
+            return None
+        try:
+            listing = self._listing_factory(source=self.source, show_log=False)
+            try:
+                table = listing.symbols_by_exchange(get_all=True, show_log=False)
+            except TypeError:
+                table = listing.symbols_by_exchange(show_log=False)
+            records = table.to_dict(orient="records") if hasattr(table, "to_dict") else table
+            for row in records:
+                if not isinstance(row, Mapping):
+                    continue
+                row_symbol = str(row.get("symbol", "")).strip().upper()
+                exchange = str(row.get("exchange", "")).strip().upper()
+                if row_symbol and exchange in {"HOSE", "HNX", "UPCOM"}:
+                    self._exchange_cache[row_symbol] = exchange
+        except Exception:
+            logger.warning("vnstock exchange listing unavailable", exc_info=True)
+            return None
+        self._listing_loaded = True
+        return self._exchange_cache.get(normalized_symbol)
 
     def get_market_index(
         self, index_code: str, start: date, end: date, *, is_final: bool = False
