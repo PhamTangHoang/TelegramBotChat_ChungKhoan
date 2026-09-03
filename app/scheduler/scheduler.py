@@ -39,7 +39,7 @@ class SchedulerService:
                 self._finish(session, run, "SKIPPED", now)
                 return "SKIPPED"
             for symbol in self.settings.watchlist_symbols:
-                self.analysis_service.run_sync(symbol, now=now)
+                self.analysis_service.run_sync(symbol, now=now, force_refresh=True)
             self._finish(session, run, "SUCCESS", self.clock())
             return "SUCCESS"
         except Exception as exc:

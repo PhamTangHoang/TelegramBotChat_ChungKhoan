@@ -28,7 +28,14 @@ class FakeAnalysis:
     def __init__(self) -> None:
         self.calls: list[tuple[str, bool]] = []
 
-    def run_sync(self, symbol: str, *, now: datetime, is_final: bool = False):
+    def run_sync(
+        self,
+        symbol: str,
+        *,
+        now: datetime,
+        is_final: bool = False,
+        force_refresh: bool = False,
+    ):
         self.calls.append((symbol, is_final))
 
     def refresh_news_sync(self, session: object, *, now: datetime) -> int:

@@ -25,7 +25,9 @@ from app.database.repositories.candle_repository import (
     finalize_candle,
     finalize_index_candle,
     get_finalized_history,
+    get_index_candle_with_metadata,
     get_index_candles,
+    get_market_candle_with_metadata,
     get_market_candles,
     upsert_index_candle,
     upsert_intraday_candle,
@@ -109,6 +111,7 @@ class MarketAnalysisService:
         now: datetime | None = None,
         is_final: bool = False,
         include_gemini: bool = True,
+        force_refresh: bool = False,
     ) -> AnalysisOutput:
         symbol = symbol.strip().upper()
         exchange = self._exchange_for(symbol)
@@ -122,36 +125,46 @@ class MarketAnalysisService:
 
         session = self.session_factory()
         try:
-            try:
-                market_rows = list(
-                    self.provider.get_ohlcv(symbol, start, trading_date, is_final=is_final)
-                )
-                index_rows = list(
-                    self.provider.get_market_index(
-                        "VNINDEX", start, trading_date, is_final=is_final
-                    )
-                )
-                if is_final and not any(
-                    row.trading_date == trading_date for row in market_rows
-                ):
-                    raise AnalysisUnavailable("final market data is not available for today")
-                market_rows = self._mark_historical_final(market_rows, is_final=is_final)
-                index_rows = self._mark_index_historical_final(index_rows, is_final=is_final)
-                self._persist_market(session, market_rows, is_final=is_final)
-                self._persist_index(session, index_rows, is_final=is_final)
-                session.commit()
-            except AnalysisUnavailable:
-                session.rollback()
-                raise
-            except Exception:
-                session.rollback()
-                if not self.settings.allow_stale_signal:
-                    logger.exception("market provider failed and stale fallback is disabled")
-                    raise AnalysisUnavailable("market data is unavailable") from None
-                freshness = DataFreshness.STALE_CACHE
-                logger.warning("using stale market cache after provider failure", exc_info=True)
+            if not is_final and not force_refresh and self._cache_is_fresh(
+                session,
+                symbol=symbol,
+                exchange=exchange,
+                trading_date=trading_date,
+                as_of=as_of,
+            ):
                 market_rows = get_market_candles(session, symbol=symbol, exchange=exchange)
                 index_rows = get_index_candles(session, index_code="VNINDEX")
+            else:
+                try:
+                    market_rows = list(
+                        self.provider.get_ohlcv(symbol, start, trading_date, is_final=is_final)
+                    )
+                    index_rows = list(
+                        self.provider.get_market_index(
+                            "VNINDEX", start, trading_date, is_final=is_final
+                        )
+                    )
+                    if is_final and not any(
+                        row.trading_date == trading_date for row in market_rows
+                    ):
+                        raise AnalysisUnavailable("final market data is not available for today")
+                    market_rows = self._mark_historical_final(market_rows, is_final=is_final)
+                    index_rows = self._mark_index_historical_final(index_rows, is_final=is_final)
+                    self._persist_market(session, market_rows, is_final=is_final)
+                    self._persist_index(session, index_rows, is_final=is_final)
+                    session.commit()
+                except AnalysisUnavailable:
+                    session.rollback()
+                    raise
+                except Exception:
+                    session.rollback()
+                    if not self.settings.allow_stale_signal:
+                        logger.exception("market provider failed and stale fallback is disabled")
+                        raise AnalysisUnavailable("market data is unavailable") from None
+                    freshness = DataFreshness.STALE_CACHE
+                    logger.warning("using stale market cache after provider failure", exc_info=True)
+                    market_rows = get_market_candles(session, symbol=symbol, exchange=exchange)
+                    index_rows = get_index_candles(session, index_code="VNINDEX")
 
             current = self._current_candle(market_rows, trading_date)
             if current is None:
@@ -322,6 +335,43 @@ class MarketAnalysisService:
         except ValueError as exc:
             raise AnalysisUnavailable(f"symbol is not in watchlist: {symbol}") from exc
         return self.settings.watchlist_exchanges[index]
+
+    def _cache_is_fresh(
+        self,
+        session: Session,
+        *,
+        symbol: str,
+        exchange: str,
+        trading_date: date,
+        as_of: datetime,
+    ) -> bool:
+        max_age_minutes = getattr(self.settings, "data_cache_max_age_minutes", 0)
+        if max_age_minutes <= 0:
+            return False
+        market = get_market_candle_with_metadata(
+            session,
+            symbol=symbol,
+            exchange=exchange,
+            trading_date=trading_date,
+        )
+        index = get_index_candle_with_metadata(
+            session,
+            index_code="VNINDEX",
+            trading_date=trading_date,
+        )
+        if market is None or index is None:
+            return False
+        return self._age_minutes(as_of, market[1]) <= max_age_minutes and self._age_minutes(
+            as_of, index[1]
+        ) <= max_age_minutes
+
+    @staticmethod
+    def _age_minutes(as_of: datetime, updated_at: object) -> float:
+        if not isinstance(updated_at, datetime):
+            return float("inf")
+        if updated_at.tzinfo is None:
+            updated_at = updated_at.replace(tzinfo=VIETNAM_TZ)
+        return max(0.0, (as_of - updated_at.astimezone(as_of.tzinfo)).total_seconds() / 60)
 
     @staticmethod
     def _mark_historical_final(

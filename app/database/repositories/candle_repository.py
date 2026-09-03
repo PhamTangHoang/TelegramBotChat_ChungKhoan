@@ -151,6 +151,28 @@ def get_market_candles(
     return [_market_input(row, symbol_row) for row, symbol_row in session.execute(query)]
 
 
+def get_market_candle_with_metadata(
+    session: Session,
+    *,
+    symbol: str,
+    exchange: str,
+    trading_date: date,
+) -> tuple[MarketCandleInput, object] | None:
+    row = session.execute(
+        select(MarketCandle, Symbol)
+        .join(Symbol, MarketCandle.symbol_id == Symbol.id)
+        .where(
+            Symbol.symbol == symbol.upper(),
+            Symbol.exchange == exchange.upper(),
+            MarketCandle.trading_date == trading_date,
+        )
+    ).first()
+    if row is None:
+        return None
+    candle, symbol_row = row
+    return _market_input(candle, symbol_row), candle.updated_at
+
+
 def get_finalized_history(
     session: Session,
     *,
@@ -192,6 +214,23 @@ def get_index_candles(
     if end is not None:
         query = query.where(MarketIndex.trading_date <= end)
     return [_index_input(row) for row in session.scalars(query)]
+
+
+def get_index_candle_with_metadata(
+    session: Session,
+    *,
+    index_code: str,
+    trading_date: date,
+) -> tuple[IndexCandleInput, object] | None:
+    row = session.scalar(
+        select(MarketIndex).where(
+            MarketIndex.index_code == index_code.upper(),
+            MarketIndex.trading_date == trading_date,
+        )
+    )
+    if row is None:
+        return None
+    return _index_input(row), row.updated_at
 
 
 def _market_input(row: MarketCandle, symbol: Symbol) -> MarketCandleInput:
