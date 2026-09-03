@@ -123,7 +123,7 @@ class RuleEngine:
         reasons = [
             RuleReason(
                 rule_id=evaluation.rule_id,
-                label=evaluation.label,
+                message=evaluation.label,
                 status=(
                     RuleStatus.PASS
                     if evaluation.passed

@@ -109,7 +109,7 @@ def _reason_line(rule_result: Any, rule_id: str) -> str:
     if reason is None:
         return f"• {rule_id}: unavailable"
     icon = "✓" if reason.status == RuleStatus.PASS else "✗"
-    return f"• {icon} {reason.label}: {reason.status.value} ({_number(reason.value)})"
+    return f"• {icon} {reason.message}: {reason.status.value} ({_number(reason.value)})"
 
 
 def _number(value: Any) -> str:

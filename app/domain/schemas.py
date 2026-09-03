@@ -109,7 +109,7 @@ class RuleReason(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     rule_id: str = Field(min_length=1, max_length=16)
-    label: str = Field(min_length=1, max_length=128)
+    message: str = Field(min_length=1, max_length=128)
     status: RuleStatus
     value: float | None = None
     threshold: str = Field(min_length=1, max_length=128)

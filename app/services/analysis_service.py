@@ -126,6 +126,10 @@ class MarketAnalysisService:
                         "VNINDEX", start, trading_date, is_final=is_final
                     )
                 )
+                if is_final and not any(
+                    row.trading_date == trading_date for row in market_rows
+                ):
+                    raise AnalysisUnavailable("final market data is not available for today")
                 market_rows = self._mark_historical_final(market_rows, is_final=is_final)
                 index_rows = self._mark_index_historical_final(index_rows, is_final=is_final)
                 self._persist_market(session, market_rows, is_final=is_final)
@@ -186,7 +190,7 @@ class MarketAnalysisService:
                 data_freshness=freshness,
             )
             if freshness == DataFreshness.STALE_CACHE and not self.settings.allow_stale_signal:
-                rule_result = self._stale_disallowed_result()
+                rule_result = self._stale_disallowed_result(self.settings.rule_version)
 
             news = self._collect_news(session, symbol=symbol, as_of=as_of)
             data_snapshot = build_data_snapshot(
@@ -338,7 +342,7 @@ class MarketAnalysisService:
         )
 
     @staticmethod
-    def _stale_disallowed_result() -> RuleResult:
+    def _stale_disallowed_result(rule_version: str) -> RuleResult:
         return RuleResult(
             score=0,
             max_score=0,
@@ -348,7 +352,7 @@ class MarketAnalysisService:
             risk=Risk.LOW,
             risk_points=0,
             risk_reasons=["stale_cache_disallowed"],
-            rule_version="1.5.0",
+            rule_version=rule_version,
         )
 
     def _collect_news(self, session: Session, *, symbol: str, as_of: datetime) -> list[Any]:

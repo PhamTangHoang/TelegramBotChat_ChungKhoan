@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from datetime import datetime
+from datetime import datetime, time
 from typing import Any
 
 from app.database.repositories.scheduler_repository import (
@@ -53,6 +53,10 @@ class SchedulerService:
         now = self.clock()
         run, session = self._start("eod_settle", scheduled_at or now, now)
         try:
+            in_settlement_window = time(15, 15) <= now.time() < time(15, 45)
+            if not self.calendar.is_trading_day(now.date()) or not in_settlement_window:
+                self._finish(session, run, "SKIPPED", now)
+                return "SKIPPED"
             failures = 0
             for symbol in self.settings.watchlist_symbols:
                 try:

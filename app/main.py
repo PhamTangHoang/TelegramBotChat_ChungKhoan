@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager
+from datetime import datetime
 from typing import Any
 
 from fastapi import FastAPI
@@ -39,7 +40,7 @@ async def lifespan(_: FastAPI):
                 analysis_service=service,
                 calendar=calendar,
                 session_factory=SessionLocal,
-                clock=lambda: __import__("datetime").datetime.now(calendar.timezone),
+                clock=lambda: datetime.now(calendar.timezone),
             )
             scheduler = scheduler_service.build_scheduler()
             scheduler.start()
