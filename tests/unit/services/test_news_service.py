@@ -70,3 +70,15 @@ def test_news_service_returns_empty_when_no_feed_is_configured() -> None:
 
     assert result.status == "EMPTY"
     assert result.items == ()
+
+
+def test_news_report_refreshes_once_when_recent_cache_is_empty() -> None:
+    service, factory = _service()
+    now = datetime(2026, 9, 3, 5, tzinfo=UTC)
+
+    report = service.report_sync("FPT", now=now)
+
+    assert "FPT test headline" in report
+    result = service.list_recent_sync(symbol="FPT", now=now)
+    assert result.status == "AVAILABLE"
+    assert len(result.items) == 1

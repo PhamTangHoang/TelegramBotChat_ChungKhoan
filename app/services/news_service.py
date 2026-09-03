@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -14,6 +15,7 @@ from app.database.repositories.news_repository import recent_news, upsert_news
 from app.telegram.formatter import format_news_report
 
 VIETNAM_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -82,6 +84,15 @@ class NewsService:
     def report_sync(self, symbol: str | None = None, *, now: datetime | None = None) -> str:
         as_of = now or datetime.now(VIETNAM_TZ)
         result = self.list_recent_sync(symbol=symbol, now=as_of)
+        if result.status == "EMPTY" and tuple(getattr(self.settings, "news_feed_urls", ())):
+            session = self.session_factory()
+            try:
+                self.refresh_sync(session, now=as_of)
+            except Exception:
+                logger.warning("on-demand news refresh failed", exc_info=True)
+            finally:
+                session.close()
+            result = self.list_recent_sync(symbol=symbol, now=as_of)
         return format_news_report(
             symbol=symbol,
             as_of=as_of,
