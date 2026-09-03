@@ -10,6 +10,7 @@ from app.database.repositories.scheduler_repository import (
     start_scheduler_run,
 )
 from app.services.analysis_service import AnalysisUnavailable, MarketAnalysisService
+from app.services.news_service import NewsService
 
 logger = logging.getLogger(__name__)
 
@@ -23,12 +24,14 @@ class SchedulerService:
         calendar: Any,
         session_factory: Callable[[], Any],
         clock: Callable[[], datetime],
+        news_service: NewsService | None = None,
     ) -> None:
         self.settings = settings
         self.analysis_service = analysis_service
         self.calendar = calendar
         self.session_factory = session_factory
         self.clock = clock
+        self.news_service = news_service
 
     def market_hourly(self, *, scheduled_at: datetime | None = None) -> str:
         now = self.clock()
@@ -84,7 +87,9 @@ class SchedulerService:
         now = self.clock()
         run, session = self._start("news_refresh", scheduled_at or now, now)
         try:
-            self.analysis_service.refresh_news_sync(session, now=now)
+            if self.news_service is None:
+                raise RuntimeError("news service is not configured")
+            self.news_service.refresh_sync(session, now=now)
             self._finish(session, run, "SUCCESS", self.clock())
             return "SUCCESS"
         except Exception as exc:

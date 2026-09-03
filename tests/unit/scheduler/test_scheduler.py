@@ -38,7 +38,8 @@ class FakeAnalysis:
     ):
         self.calls.append((symbol, is_final))
 
-    def refresh_news_sync(self, session: object, *, now: datetime) -> int:
+class FakeNews:
+    def refresh_sync(self, session: object, *, now: datetime) -> int:
         return 0
 
 
@@ -80,3 +81,17 @@ def test_eod_job_runs_each_watchlist_symbol_as_final() -> None:
 
     assert scheduler.eod_settle() == "SUCCESS"
     assert analysis.calls == [("FPT", True), ("VNM", True)]
+
+
+def test_news_job_uses_the_separate_news_service() -> None:
+    now = datetime(2026, 9, 3, 10, 0, tzinfo=ZoneInfo("Asia/Ho_Chi_Minh"))
+    scheduler = SchedulerService(
+        settings=settings(),
+        analysis_service=FakeAnalysis(),
+        calendar=HOSECalendar(),
+        session_factory=FakeSession,
+        clock=lambda: now,
+        news_service=FakeNews(),
+    )
+
+    assert scheduler.news_refresh() == "SUCCESS"

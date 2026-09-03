@@ -30,9 +30,15 @@ async def lifespan(_: FastAPI):
             from app.llm.gemini import GeminiExplainer
             from app.scheduler.scheduler import SchedulerService
             from app.services.analysis_service import MarketAnalysisService
+            from app.services.news_service import NewsService
             from app.telegram.bot import configure_bot_commands, create_dispatcher
 
             calendar = HOSECalendar()
+            news_service = NewsService(
+                provider=RssProvider(allowed_domains=settings.news_allowed_domains),
+                session_factory=SessionLocal,
+                settings=settings,
+            )
             service = MarketAnalysisService(
                 provider=VnstockProvider(source=settings.vnstock_source),
                 session_factory=SessionLocal,
@@ -46,7 +52,6 @@ async def lifespan(_: FastAPI):
                     if settings.gemini_api_key
                     else None
                 ),
-                news_provider=RssProvider(),
             )
             scheduler_service = SchedulerService(
                 settings=settings,
@@ -54,10 +59,11 @@ async def lifespan(_: FastAPI):
                 calendar=calendar,
                 session_factory=SessionLocal,
                 clock=lambda: datetime.now(calendar.timezone),
+                news_service=news_service,
             )
             scheduler = scheduler_service.build_scheduler()
             scheduler.start()
-            bot, dispatcher = create_dispatcher(settings, service)
+            bot, dispatcher = create_dispatcher(settings, service, news_service)
             await configure_bot_commands(bot)
             polling_task = asyncio.create_task(dispatcher.start_polling(bot))
             logger.info("runtime started with Telegram and scheduler")

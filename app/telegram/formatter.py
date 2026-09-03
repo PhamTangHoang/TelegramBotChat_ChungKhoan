@@ -22,7 +22,6 @@ def format_technical_report(
     rule_result: Any,
     data_freshness: DataFreshness,
     gemini: Any | None = None,
-    news: Iterable[Any] = (),
 ) -> str:
     lines = [
         f"{symbol.upper()} — Technical Analysis",
@@ -60,12 +59,6 @@ def format_technical_report(
     if any(reason.status == RuleStatus.NOT_EVALUATED for reason in rule_result.reasons):
         lines.append("⚠️ R6 chưa đánh giá vì chưa đủ 15 phút giao dịch.")
 
-    news_items = list(news)
-    if news_items:
-        lines.extend(["", "NEWS"])
-        for item in news_items:
-            lines.append(f"• {getattr(item, 'title', item)}")
-
     if gemini is not None:
         lines.extend(
             [
@@ -80,6 +73,49 @@ def format_technical_report(
         )
 
     lines.extend(["", DISCLAIMER])
+    return "\n".join(lines)
+
+
+def format_news_report(
+    *,
+    symbol: str | None,
+    as_of: datetime,
+    items: Iterable[Any],
+    status: str,
+) -> str:
+    news_items = list(items)
+    subject = symbol.upper() if symbol else "thị trường"
+    lines = [
+        f"{subject} — News",
+        f"Cập nhật đến: {_format_datetime(as_of)}",
+        f"Trạng thái nguồn: {status}",
+        "",
+    ]
+    if not news_items:
+        lines.append("Chưa có tin tức phù hợp trong khoảng thời gian đã chọn.")
+    else:
+        for index, item in enumerate(news_items, start=1):
+            lines.extend(
+                [
+                    f"{index}. {getattr(item, 'title', 'Không có tiêu đề')}",
+                    f"Nguồn: {getattr(item, 'source', 'Không rõ')}",
+                    f"Đăng lúc: {_format_datetime(getattr(item, 'published_at', None))}",
+                    f"Bot lấy lúc: {_format_datetime(getattr(item, 'fetched_at', None))}",
+                ]
+            )
+            summary = getattr(item, "summary", None)
+            if summary:
+                lines.append(f"Tóm tắt: {summary}")
+            url = getattr(item, "url", None)
+            lines.append(f"Link bài viết: {url or 'Không có'}")
+            lines.append("")
+
+    lines.extend(
+        [
+            "Nguồn là dữ liệu tổng hợp từ RSS; nội dung chưa được bot xác minh độc lập.",
+            "Tin tức chỉ mang tính tham khảo, không phải khuyến nghị đầu tư.",
+        ]
+    )
     return "\n".join(lines)
 
 
@@ -114,3 +150,9 @@ def _reason_line(rule_result: Any, rule_id: str) -> str:
 
 def _number(value: Any) -> str:
     return "N/A" if value is None else str(value)
+
+
+def _format_datetime(value: Any) -> str:
+    if not isinstance(value, datetime):
+        return "Không rõ"
+    return value.isoformat(sep=" ", timespec="minutes")

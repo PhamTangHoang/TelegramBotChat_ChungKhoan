@@ -173,7 +173,7 @@ def test_gemini_and_chart_failures_keep_saved_technical_result() -> None:
     assert output.chart is None
 
 
-def test_gemini_receives_persisted_news_as_serializable_context() -> None:
+def test_analysis_does_not_fetch_or_send_news_context() -> None:
     engine, factory = database()
     gemini = CapturingGemini()
     config = settings(allow_stale_signal=False)
@@ -184,7 +184,6 @@ def test_gemini_receives_persisted_news_as_serializable_context() -> None:
         calendar=HOSECalendar(),
         settings=config,
         gemini=gemini,
-        news_provider=NewsProvider(),
     )
 
     output = service.run_sync(
@@ -193,14 +192,7 @@ def test_gemini_receives_persisted_news_as_serializable_context() -> None:
     )
 
     assert output.analysis_run_id is not None
-    assert isinstance(gemini.event_context, list)
-    assert len(gemini.event_context) == 1
-    event = gemini.event_context[0]
-    assert event["source"] == "test-feed"
-    assert event["title"] == "FPT test headline"
-    assert event["url"] == "https://example.com/fpt-test"
-    assert event["content_hash"] == "a" * 64
-    assert event["fetched_at"].startswith("2026-08-20T03:00:00")
+    assert gemini.event_context == []
 
 
 def test_final_run_rejects_provider_data_without_today() -> None:

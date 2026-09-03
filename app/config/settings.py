@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     market_job_interval_minutes: int = Field(default=60, ge=1, le=1440)
     news_job_interval_minutes: int = Field(default=45, ge=1, le=1440)
     news_feed_urls: CsvValues = ()
+    news_lookback_hours: int = Field(default=24, ge=1, le=168)
+    news_max_items: int = Field(default=10, ge=1, le=50)
+    news_allowed_domains: CsvValues = ()
     eod_settle_job_time: str = "15:20"
     telegram_timezone: str = "Asia/Ho_Chi_Minh"
 

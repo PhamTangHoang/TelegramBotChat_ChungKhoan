@@ -16,7 +16,6 @@ from app.analysis.rule_engine import RuleEngine
 from app.audit.snapshot import build_data_snapshot, canonicalize
 from app.chart.chart_engine import ChartEngine
 from app.data.providers.base import MarketDataProvider
-from app.data.providers.rss import RssProvider
 from app.database.repositories.analysis_repository import (
     create_analysis_run,
     latest_analysis_run,
@@ -32,9 +31,8 @@ from app.database.repositories.candle_repository import (
     upsert_index_candle,
     upsert_intraday_candle,
 )
-from app.database.repositories.news_repository import recent_news, upsert_news
 from app.domain.enums import AnalysisKind, DataFreshness, Risk, Signal
-from app.domain.schemas import IndexCandle, IndicatorSnapshot, MarketCandle, NewsItem, RuleResult
+from app.domain.schemas import IndexCandle, IndicatorSnapshot, MarketCandle, RuleResult
 from app.llm.gemini import GeminiError, GeminiExplainer, explanation_conflicts_with_signal
 from app.telegram.formatter import format_technical_report
 
@@ -70,7 +68,6 @@ class MarketAnalysisService:
         rule_engine: RuleEngine | None = None,
         gemini: GeminiExplainer | None = None,
         chart_engine: ChartEngine | None = None,
-        news_provider: RssProvider | None = None,
     ) -> None:
         self.provider = provider
         self.session_factory = session_factory
@@ -84,7 +81,6 @@ class MarketAnalysisService:
         )
         self.gemini = gemini
         self.chart_engine = chart_engine or ChartEngine()
-        self.news_provider = news_provider
 
     async def analyze(self, symbol: str) -> Any:
         output = await asyncio.to_thread(self.run_sync, symbol)
@@ -238,19 +234,9 @@ class MarketAnalysisService:
             if freshness == DataFreshness.STALE_CACHE and not self.settings.allow_stale_signal:
                 rule_result = self._stale_disallowed_result(self.settings.rule_version)
 
-            try:
-                news = self._collect_news(session, symbol=symbol, as_of=as_of)
-            except Exception:
-                session.rollback()
-                logger.warning(
-                    "news context unavailable; continuing technical analysis",
-                    exc_info=True,
-                )
-                news = []
             data_snapshot = build_data_snapshot(
                 market_candles=[*history, current],
                 index_candles=[*index_history, *([current_index] if current_index else [])],
-                news=[self._news_snapshot(item) for item in news],
             )
             provenance = {
                 "provider": type(self.provider).__name__,
@@ -261,7 +247,6 @@ class MarketAnalysisService:
                 "price_basis": indicators.price_basis.value,
                 "calendar_version": self.settings.calendar_version,
                 "exchange": exchange,
-                "news_count": len(news),
                 "index_provider_timestamp": (
                     current_index.provider_timestamp if current_index else None
                 ),
@@ -290,7 +275,7 @@ class MarketAnalysisService:
                 try:
                     gemini_explanation = self.gemini.explain(
                         quantitative_context=indicators.model_dump(mode="json"),
-                        event_context=[self._news_context(item) for item in news],
+                        event_context=[],
                         decision_context=rule_result.model_dump(mode="json"),
                     )
                     explanation_conflict = explanation_conflicts_with_signal(
@@ -324,7 +309,6 @@ class MarketAnalysisService:
                 rule_result=rule_result,
                 data_freshness=freshness,
                 gemini=gemini_explanation,
-                news=news,
             )
             return AnalysisOutput(
                 symbol=symbol,
@@ -456,11 +440,6 @@ class MarketAnalysisService:
             rule_version=rule_version,
         )
 
-    def _collect_news(self, session: Session, *, symbol: str, as_of: datetime) -> list[Any]:
-        self.refresh_news_sync(session, now=as_of)
-        since = as_of - timedelta(days=1)
-        return list(recent_news(session, since=since, symbol=symbol))
-
     @staticmethod
     def _previous_signal(session: Session, *, symbol: str, exchange: str) -> Signal | None:
         previous = latest_analysis_run(session, symbol=symbol, exchange=exchange)
@@ -470,40 +449,3 @@ class MarketAnalysisService:
             return Signal(previous.rule_signal)
         except ValueError:
             return None
-
-    @staticmethod
-    def _news_snapshot(item: Any) -> dict[str, Any]:
-        return {
-            "id": item.id,
-            "source": item.source,
-            "title": item.title,
-            "summary": item.summary,
-            "url": item.url,
-            "published_at": item.published_at,
-            "content_hash": item.content_hash,
-            "fetched_at": item.fetched_at,
-            "symbol": item.symbol,
-        }
-
-    @staticmethod
-    def _news_context(item: Any) -> dict[str, Any]:
-        return NewsItem(
-            source=item.source,
-            title=item.title,
-            summary=item.summary,
-            url=item.url,
-            published_at=item.published_at,
-            content_hash=item.content_hash,
-            symbol=item.symbol,
-            fetched_at=item.fetched_at,
-        ).model_dump(mode="json")
-
-    def refresh_news_sync(self, session: Session, *, now: datetime) -> int:
-        if self.news_provider is None or not self.settings.news_feed_urls:
-            return 0
-        count = 0
-        for item in self.news_provider.fetch(self.settings.news_feed_urls):
-            upsert_news(session, item)
-            count += 1
-        session.commit()
-        return count

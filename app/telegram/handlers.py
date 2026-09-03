@@ -29,6 +29,10 @@ class TelegramAnalysisService(Protocol):
     async def chat(self, message: str) -> str: ...
 
 
+class TelegramNewsService(Protocol):
+    async def report(self, symbol: str | None = None) -> str: ...
+
+
 def _fold_text(value: str) -> str:
     folded = "".join(
         character
@@ -53,6 +57,18 @@ def _classify_text(value: str) -> tuple[str, str | None]:
     if analysis_match:
         return "analyze", analysis_match.group(1).upper()
 
+    if "tin thi truong" in folded:
+        return "news", None
+    news_match = re.search(
+        r"\b(?:news|tin tuc|tin moi|tin co phieu)(?:\s+(?:ma\s+)?([a-z]{2,5}))?\b",
+        folded,
+    )
+    if news_match:
+        return "news", (news_match.group(1).upper() if news_match.group(1) else None)
+    related_news_match = re.search(r"\btin .*?\b(?:ve|cua)\s+(?:ma\s+)?([a-z]{2,5})\b", folded)
+    if related_news_match:
+        return "news", related_news_match.group(1).upper()
+
     if "thi truong" in folded or folded in {"market", "trang thai thi truong"}:
         return "market", None
 
@@ -76,6 +92,7 @@ def build_router(
     allowed_chat_ids: tuple[int, ...],
     public_access: bool = False,
     rate_limit_per_minute: int,
+    news_service: TelegramNewsService | None = None,
 ):
     """Build aiogram handlers without importing aiogram during unit-only imports."""
     from aiogram import F, Router
@@ -154,6 +171,20 @@ def build_router(
             logger.exception("/market failed")
             await message.answer("Không thể tải trạng thái thị trường lúc này.")
 
+    @router.message(Command("news"))
+    async def news_handler(message: Message, command: CommandObject) -> None:
+        if not await authorized(message):
+            return
+        if news_service is None:
+            await message.answer("Tính năng tin tức chưa được cấu hình.")
+            return
+        symbol = (command.args or "").strip().upper() or None
+        try:
+            await send_text_chunks(message.answer, await news_service.report(symbol))
+        except Exception:
+            logger.exception("/news failed for symbol=%s", symbol)
+            await message.answer("Không thể tải tin tức lúc này.")
+
     @router.message(F.text)
     async def text_handler(message: Message) -> None:
         if not await authorized(message):
@@ -165,6 +196,16 @@ def build_router(
             return
         if kind == "market":
             await send_text_chunks(message.answer, await service.market())
+            return
+        if kind == "news":
+            if news_service is None:
+                await message.answer("Tính năng tin tức chưa được cấu hình.")
+                return
+            try:
+                await send_text_chunks(message.answer, await news_service.report(symbol))
+            except Exception:
+                logger.exception("natural news failed for symbol=%s", symbol)
+                await message.answer("Không thể tải tin tức lúc này.")
             return
         if kind == "analyze" and symbol is not None:
             await message.answer("⏳ Đang phân tích dữ liệu...")

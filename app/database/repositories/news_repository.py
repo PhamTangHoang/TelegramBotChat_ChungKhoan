@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from app.database.models import News
@@ -43,10 +43,20 @@ def recent_news(
 ) -> list[News]:
     query = (
         select(News)
-        .where(News.fetched_at >= since)
-        .order_by(News.published_at.desc())
+        .where(
+            or_(
+                News.published_at >= since,
+                and_(News.published_at.is_(None), News.fetched_at >= since),
+            )
+        )
+        .order_by(
+            News.published_at.is_(None),
+            News.published_at.desc(),
+            News.fetched_at.desc(),
+        )
         .limit(limit)
     )
     if symbol is not None:
+        symbol = symbol.strip().upper()
         query = query.where((News.symbol == symbol) | (News.symbol.is_(None)))
     return list(session.scalars(query))

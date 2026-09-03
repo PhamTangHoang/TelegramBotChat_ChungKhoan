@@ -4,10 +4,14 @@ from typing import Any
 
 from app.config.settings import Settings
 from app.telegram.commands import aiogram_command_menu
-from app.telegram.handlers import TelegramAnalysisService, build_router
+from app.telegram.handlers import TelegramAnalysisService, TelegramNewsService, build_router
 
 
-def create_dispatcher(settings: Settings, service: TelegramAnalysisService) -> tuple[Any, Any]:
+def create_dispatcher(
+    settings: Settings,
+    service: TelegramAnalysisService,
+    news_service: TelegramNewsService | None = None,
+) -> tuple[Any, Any]:
     if not settings.telegram_bot_token:
         raise ValueError("TELEGRAM_BOT_TOKEN is required to start Telegram polling")
     from aiogram import Bot, Dispatcher
@@ -20,6 +24,7 @@ def create_dispatcher(settings: Settings, service: TelegramAnalysisService) -> t
             allowed_chat_ids=settings.telegram_allowed_chat_ids,
             public_access=settings.telegram_public_access,
             rate_limit_per_minute=settings.telegram_rate_limit_per_min,
+            news_service=news_service,
         )
     )
     return bot, dispatcher
