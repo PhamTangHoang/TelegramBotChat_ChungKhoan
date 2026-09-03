@@ -20,6 +20,9 @@ the v1.5 business semantics.
   accepts additional HOSE symbols and uses HOSE as the default exchange.
 - Gemini's Pydantic response schema is sanitized to remove unsupported
   `additionalProperties` fields before it is sent to the API.
+- The vnstock KBS index adapter keeps the last row when the provider emits
+  duplicate VNINDEX dates and logs the event; duplicate equity dates remain a
+  hard provider-schema failure.
 
 ## Explicit MVP policies
 

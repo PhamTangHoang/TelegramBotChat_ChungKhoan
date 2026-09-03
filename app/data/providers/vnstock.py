@@ -1,10 +1,14 @@
-from datetime import date
+from collections.abc import Mapping
+from datetime import date, datetime
+import logging
 from typing import Any, Callable
 
 from app.data.errors import ProviderSchemaError
 from app.data.normalizer import normalize_index, normalize_ohlcv
 from app.data.providers.base import MarketDataProvider
 from app.data.providers.resilience import CircuitBreaker, retry_call
+
+logger = logging.getLogger(__name__)
 
 
 class VnstockProvider(MarketDataProvider):
@@ -71,5 +75,43 @@ class VnstockProvider(MarketDataProvider):
                 source=self.source,
             )
 
-        rows = self._fetch(operation)
+        rows = _deduplicate_index_rows(self._fetch(operation))
         return normalize_index(rows, index_code=index_code, source="vnstock", is_final=is_final)
+
+
+def _deduplicate_index_rows(rows: Any) -> list[Any]:
+    if hasattr(rows, "to_dict"):
+        records = rows.to_dict(orient="records")
+    elif isinstance(rows, Mapping):
+        records = [rows]
+    else:
+        records = list(rows)
+
+    deduplicated: dict[object, Any] = {}
+    for row in records:
+        if not isinstance(row, Mapping):
+            return records
+        key = _index_date_key(row)
+        if key in deduplicated:
+            logger.warning("vnstock returned duplicate index date=%s; keeping last row", key)
+        deduplicated[key] = row
+    return list(deduplicated.values())
+
+
+def _index_date_key(row: Mapping[str, Any]) -> object:
+    for field in ("trading_date", "date", "time", "timestamp"):
+        if field not in row:
+            continue
+        value = row[field]
+        if isinstance(value, datetime):
+            return value.date()
+        if isinstance(value, date):
+            return value
+        if isinstance(value, str):
+            raw = value.strip().replace("Z", "+00:00")
+            try:
+                return datetime.fromisoformat(raw).date()
+            except ValueError:
+                return f"raw:{value}"
+        return f"raw:{value!r}"
+    return f"missing:{id(row)}"
