@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy.orm import Session
 
 from app.analysis.analyzer import TechnicalAnalyzer
+from app.analysis.pp10 import PP10Evaluator
 from app.analysis.rule_engine import RuleEngine
 from app.audit.snapshot import build_data_snapshot, canonicalize
 from app.chart.chart_engine import ChartEngine
@@ -32,7 +33,7 @@ from app.database.repositories.candle_repository import (
     upsert_intraday_candle,
 )
 from app.domain.enums import AnalysisKind, DataFreshness, Risk, Signal
-from app.domain.schemas import IndexCandle, IndicatorSnapshot, MarketCandle, RuleResult
+from app.domain.schemas import IndexCandle, IndicatorSnapshot, MarketCandle, PP10Result, RuleResult
 from app.llm.gemini import GeminiError, GeminiExplainer, explanation_conflicts_with_signal
 from app.telegram.formatter import format_technical_report
 
@@ -51,6 +52,7 @@ class AnalysisOutput:
     chart: bytes | None
     indicators: IndicatorSnapshot
     rule_result: RuleResult
+    pp10_result: PP10Result
     analysis_run_id: int | None
 
 
@@ -66,6 +68,7 @@ class MarketAnalysisService:
         settings: Any,
         analyzer: TechnicalAnalyzer | None = None,
         rule_engine: RuleEngine | None = None,
+        pp10_evaluator: PP10Evaluator | None = None,
         gemini: GeminiExplainer | None = None,
         chart_engine: ChartEngine | None = None,
     ) -> None:
@@ -78,6 +81,9 @@ class MarketAnalysisService:
             rule_version=settings.rule_version,
             volume_threshold=settings.volume_ratio_threshold,
             volume_min_elapsed_minutes=settings.volume_min_elapsed_minutes,
+        )
+        self.pp10_evaluator = pp10_evaluator or PP10Evaluator(
+            version=getattr(settings, "pp10_version", "1.0.0")
         )
         self.gemini = gemini
         self.chart_engine = chart_engine or ChartEngine()
@@ -128,7 +134,7 @@ class MarketAnalysisService:
         if as_of.tzinfo is None:
             as_of = as_of.replace(tzinfo=VIETNAM_TZ)
         trading_date = as_of.astimezone(VIETNAM_TZ).date()
-        start = trading_date - timedelta(days=120)
+        start = trading_date - timedelta(days=400)
         freshness = DataFreshness.FRESH
         started_at = perf_counter()
 
@@ -190,7 +196,7 @@ class MarketAnalysisService:
                 symbol=symbol,
                 exchange=exchange,
                 before=current.trading_date,
-                limit=50,
+                limit=260,
             )
             stored_index_rows = get_index_candles(
                 session,
@@ -233,6 +239,9 @@ class MarketAnalysisService:
             )
             if freshness == DataFreshness.STALE_CACHE and not self.settings.allow_stale_signal:
                 rule_result = self._stale_disallowed_result(self.settings.rule_version)
+            pp10_result = self.pp10_evaluator.evaluate(indicators)
+            rule_result_snapshot = rule_result.model_dump(mode="json")
+            rule_result_snapshot["pp10"] = pp10_result.model_dump(mode="json")
 
             data_snapshot = build_data_snapshot(
                 market_candles=[*history, current],
@@ -259,7 +268,7 @@ class MarketAnalysisService:
                 as_of=as_of,
                 data_snapshot=data_snapshot,
                 indicator_snapshot=indicators.model_dump(mode="json"),
-                rule_result=rule_result.model_dump(mode="json"),
+                rule_result=rule_result_snapshot,
                 data_provenance=canonicalize(provenance),
                 prompt_version=self.settings.prompt_version,
                 rule_version=self.settings.rule_version,
@@ -276,7 +285,7 @@ class MarketAnalysisService:
                     gemini_explanation = self.gemini.explain(
                         quantitative_context=indicators.model_dump(mode="json"),
                         event_context=[],
-                        decision_context=rule_result.model_dump(mode="json"),
+                        decision_context=rule_result_snapshot,
                     )
                     explanation_conflict = explanation_conflicts_with_signal(
                         gemini_explanation, rule_result.signal
@@ -309,6 +318,7 @@ class MarketAnalysisService:
                 rule_result=rule_result,
                 data_freshness=freshness,
                 gemini=gemini_explanation,
+                pp10=pp10_result,
             )
             return AnalysisOutput(
                 symbol=symbol,
@@ -316,6 +326,7 @@ class MarketAnalysisService:
                 chart=chart,
                 indicators=indicators,
                 rule_result=rule_result,
+                pp10_result=pp10_result,
                 analysis_run_id=run.id,
             )
         finally:

@@ -24,6 +24,7 @@ Copy `.env.example` to `.env`, then supply at least:
   `TELEGRAM_ALLOWED_CHAT_IDS` (comma-separated numeric chat IDs) for whitelist mode
 - `GEMINI_API_KEY` (optional; technical report works without it)
 - `NEWS_FEED_URLS` (optional comma-separated RSS URLs)
+- `NEWS_LOOKBACK_HOURS`, `NEWS_MAX_ITEMS` and optional `NEWS_ALLOWED_DOMAINS`
 
 `DATABASE_URL`, `VNSTOCK_SOURCE` (`kbs` or `vci`), watchlist, schedule intervals,
 version fields and risk/data policies are also configurable in `.env.example`.
@@ -35,7 +36,9 @@ Public access keeps the per-chat rate limit but allows any Telegram user or grou
 to call the bot. Use whitelist mode when the bot should remain private.
 
 Supported commands and natural-language shortcuts include `/analyze FPT` or
-`phân tích FPT`, `/chart FPT` or `chart FPT`, and `/market` or `thị trường`.
+`phân tích FPT`, `/chart FPT` or `chart FPT`, `/news FPT` or `tin tức FPT`, and
+`/market` or `thị trường`. `/analyze` combines the technical report with the
+PP10Ulti checklist; News is deliberately kept separate from its score.
 Other plain-text messages are answered by Gemini when `GEMINI_API_KEY` is set.
 
 ## Development commands

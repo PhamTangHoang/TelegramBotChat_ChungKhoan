@@ -1,9 +1,17 @@
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.domain.enums import AnalysisKind, PriceBasis, Risk, RuleStatus, Signal
+from app.domain.enums import (
+    AnalysisKind,
+    EvaluationStatus,
+    PriceBasis,
+    Risk,
+    RuleStatus,
+    Signal,
+)
 
 
 class MarketCandle(BaseModel):
@@ -92,14 +100,28 @@ class IndicatorSnapshot(BaseModel):
     price: Decimal = Field(gt=0)
     ma20: float | None = None
     ma50: float | None = None
+    ma150: float | None = None
+    ma200: float | None = None
     rsi14: float | None = None
     macd: float | None = None
     macd_signal: float | None = None
     macd_histogram: float | None = None
     atr14: float | None = None
     volume_ratio_projected: float | None = None
+    volume_dry_up: bool | None = None
+    volume_breakout: bool | None = None
+    adx14: float | None = None
+    plus_di14: float | None = None
+    minus_di14: float | None = None
+    stoch_rsi14: float | None = None
+    obv: float | None = None
+    obv_change_5: float | None = None
+    cmf20: float | None = None
     elapsed_trading_minutes: int = Field(ge=0)
     relative_return: float | None = None
+    market_price: float | None = None
+    market_ma20: float | None = None
+    market_ma50: float | None = None
     as_of: datetime
     is_final: bool
     price_basis: PriceBasis = PriceBasis.RAW_OHLCV
@@ -127,6 +149,43 @@ class RuleResult(BaseModel):
     risk_points: int = Field(ge=0)
     risk_reasons: list[str]
     rule_version: str = Field(min_length=1, max_length=32)
+
+
+class PP10Criterion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    criterion_id: str = Field(min_length=1, max_length=8)
+    name: str = Field(min_length=1, max_length=160)
+    status: EvaluationStatus
+    score: int = Field(ge=0, le=1)
+    value: Any = None
+    threshold: str = Field(min_length=1, max_length=256)
+    reason: str = Field(min_length=1, max_length=500)
+    data_source: str = Field(min_length=1, max_length=128)
+
+
+class PP10RiskPlan(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    entry_zone: str
+    add_zone: str
+    stop_loss: str
+    target: str
+    risk_reward: str
+
+
+class PP10Result(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    score: int = Field(ge=0)
+    max_score: int = Field(ge=0)
+    evaluated_count: int = Field(ge=0, le=16)
+    total_criteria: int = Field(default=16, ge=16, le=16)
+    grade: str = Field(pattern=r"^(A\+|A|B|C)$")
+    confidence: str = Field(pattern=r"^(High|Medium|Low)$")
+    version: str = Field(min_length=1, max_length=32)
+    criteria: list[PP10Criterion] = Field(min_length=16, max_length=16)
+    risk_plan: PP10RiskPlan
 
 
 class NewsItem(BaseModel):

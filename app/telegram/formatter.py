@@ -4,7 +4,7 @@ from collections.abc import Iterable
 from datetime import datetime
 from typing import Any
 
-from app.domain.enums import AnalysisKind, DataFreshness, RuleStatus, Signal
+from app.domain.enums import AnalysisKind, DataFreshness, EvaluationStatus, RuleStatus, Signal
 
 DISCLAIMER = (
     "Công cụ hỗ trợ phân tích cá nhân, không phải khuyến nghị đầu tư. "
@@ -22,6 +22,7 @@ def format_technical_report(
     rule_result: Any,
     data_freshness: DataFreshness,
     gemini: Any | None = None,
+    pp10: Any | None = None,
 ) -> str:
     lines = [
         f"{symbol.upper()} — Technical Analysis",
@@ -58,6 +59,34 @@ def format_technical_report(
         lines.append("⚠️ Chưa đủ dữ liệu bắt buộc; không tạo signal giả.")
     if any(reason.status == RuleStatus.NOT_EVALUATED for reason in rule_result.reasons):
         lines.append("⚠️ R6 chưa đánh giá vì chưa đủ 15 phút giao dịch.")
+
+    if pp10 is not None:
+        lines.extend(
+            [
+                "",
+                "PP10ULTI",
+                f"Score: {pp10.score}/{pp10.max_score} "
+                f"(đánh giá được {pp10.evaluated_count}/16 tiêu chí)",
+                f"Grade: {pp10.grade}",
+                f"Confidence: {pp10.confidence} (không phải xác suất)",
+            ]
+        )
+        for criterion in pp10.criteria:
+            lines.append(
+                f"{criterion.criterion_id}. {_status_icon(criterion.status)} "
+                f"{criterion.name}: {criterion.status.value} — {criterion.reason}"
+            )
+        lines.extend(
+            [
+                "",
+                "POSITION PLAN",
+                f"• Vùng mua: {pp10.risk_plan.entry_zone}",
+                f"• Vùng gia tăng: {pp10.risk_plan.add_zone}",
+                f"• Stop-loss: {pp10.risk_plan.stop_loss}",
+                f"• Mục tiêu: {pp10.risk_plan.target}",
+                f"• Risk/Reward: {pp10.risk_plan.risk_reward}",
+            ]
+        )
 
     if gemini is not None:
         lines.extend(
@@ -150,6 +179,14 @@ def _reason_line(rule_result: Any, rule_id: str) -> str:
 
 def _number(value: Any) -> str:
     return "N/A" if value is None else str(value)
+
+
+def _status_icon(status: EvaluationStatus) -> str:
+    if status == EvaluationStatus.PASS:
+        return "✓"
+    if status == EvaluationStatus.FAIL:
+        return "✗"
+    return "–"
 
 
 def _format_datetime(value: Any) -> str:

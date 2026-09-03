@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.domain.enums import AnalysisKind, DataFreshness, Risk, RuleStatus, Signal
+from app.domain.enums import AnalysisKind, DataFreshness, EvaluationStatus, Risk, RuleStatus, Signal
 from app.domain.schemas import IndicatorSnapshot, RuleReason, RuleResult
 from app.telegram.access_control import AccessDenied, RateLimiter, WhitelistAccessController
 from app.telegram.commands import HELP_TEXT, command_menu
@@ -126,3 +126,68 @@ def test_news_report_shows_source_times_summary_and_original_link() -> None:
     assert "Doanh thu tăng trưởng." in report
     assert "https://example.test/fpt-result" in report
     assert "chưa được bot xác minh độc lập" in report
+
+
+def test_unified_analysis_report_includes_pp10_score_and_data_gaps() -> None:
+    indicators = IndicatorSnapshot(
+        price=Decimal("110"),
+        ma20=100,
+        ma50=90,
+        rsi14=60,
+        macd_histogram=1,
+        atr14=2,
+        volume_ratio_projected=2,
+        elapsed_trading_minutes=60,
+        relative_return=0.05,
+        as_of=datetime(2026, 9, 3, 3),
+        is_final=False,
+    )
+    rule_result = RuleResult(
+        score=1,
+        max_score=1,
+        signal=Signal.NEUTRAL,
+        confidence_raw=1,
+        reasons=[],
+        risk=Risk.LOW,
+        risk_points=0,
+        risk_reasons=[],
+        rule_version="1.5.0",
+    )
+    pp10 = SimpleNamespace(
+        score=1,
+        max_score=1,
+        evaluated_count=1,
+        grade="C",
+        confidence="Low",
+        criteria=[
+            SimpleNamespace(
+                criterion_id="1",
+                name="Xu hướng MA tổng thể",
+                status=EvaluationStatus.DATA_UNAVAILABLE,
+                reason="Thiếu MA200",
+            )
+        ],
+        risk_plan=SimpleNamespace(
+            entry_zone="N/A",
+            add_zone="N/A",
+            stop_loss="N/A",
+            target="N/A",
+            risk_reward="N/A",
+        ),
+    )
+
+    report = format_technical_report(
+        symbol="FPT",
+        as_of=indicators.as_of,
+        analysis_kind=AnalysisKind.INTRADAY,
+        is_final=False,
+        indicators=indicators,
+        rule_result=rule_result,
+        data_freshness=DataFreshness.FRESH,
+        pp10=pp10,
+    )
+
+    assert "PP10ULTI" in report
+    assert "Score: 1/1" in report
+    assert "DATA_UNAVAILABLE" in report
+    assert "POSITION PLAN" in report

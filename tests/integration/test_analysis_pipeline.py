@@ -87,3 +87,5 @@ def test_provider_to_audit_pipeline_persists_reconstructable_result() -> None:
     assert len(run.input_hash) == 64
     assert run.data_provenance["provider_source"] == "FAKE"
     assert run.rule_result["signal"] == output.rule_result.signal.value
+    assert len(output.pp10_result.criteria) == 16
+    assert run.rule_result["pp10"]["version"] == "1.0.0"

@@ -138,3 +138,144 @@ def project_volume_ratio(
         raise ValueError("volume projection inputs are invalid")
     projected_volume = float(current_cumulative_volume) / elapsed_minutes * total_minutes
     return projected_volume / float(average_volume)
+
+
+def adx(
+    highs: Sequence[Number],
+    lows: Sequence[Number],
+    closes: Sequence[Number],
+    period: int = 14,
+) -> tuple[list[MaybeFloat], list[MaybeFloat], list[MaybeFloat]]:
+    """Return ADX, +DI and -DI using Wilder smoothing."""
+    _validate_period(period)
+    if not (len(highs) == len(lows) == len(closes)):
+        raise ValueError("highs, lows and closes must have the same length")
+    adx_values: list[MaybeFloat] = [None] * len(closes)
+    plus_di: list[MaybeFloat] = [None] * len(closes)
+    minus_di: list[MaybeFloat] = [None] * len(closes)
+    if len(closes) < period:
+        return adx_values, plus_di, minus_di
+
+    true_ranges: list[float] = []
+    positive_dm: list[float] = []
+    negative_dm: list[float] = []
+    for index in range(len(closes)):
+        high = float(highs[index])
+        low = float(lows[index])
+        if index == 0:
+            true_ranges.append(high - low)
+            positive_dm.append(0.0)
+            negative_dm.append(0.0)
+            continue
+        previous_high = float(highs[index - 1])
+        previous_low = float(lows[index - 1])
+        previous_close = float(closes[index - 1])
+        up_move = high - previous_high
+        down_move = previous_low - low
+        positive_dm.append(up_move if up_move > down_move and up_move > 0 else 0.0)
+        negative_dm.append(down_move if down_move > up_move and down_move > 0 else 0.0)
+        true_ranges.append(
+            max(high - low, abs(high - previous_close), abs(low - previous_close))
+        )
+
+    average_tr = sum(true_ranges[:period]) / period
+    average_positive = sum(positive_dm[:period]) / period
+    average_negative = sum(negative_dm[:period]) / period
+    dx_values: list[float] = []
+    for index in range(period - 1, len(closes)):
+        if index >= period:
+            average_tr = ((average_tr * (period - 1)) + true_ranges[index]) / period
+            average_positive = (
+                (average_positive * (period - 1)) + positive_dm[index]
+            ) / period
+            average_negative = (
+                (average_negative * (period - 1)) + negative_dm[index]
+            ) / period
+        if average_tr == 0:
+            positive = negative = 0.0
+        else:
+            positive = 100.0 * average_positive / average_tr
+            negative = 100.0 * average_negative / average_tr
+        plus_di[index] = positive
+        minus_di[index] = negative
+        denominator = positive + negative
+        dx = 0.0 if denominator == 0 else 100.0 * abs(positive - negative) / denominator
+        dx_values.append(dx)
+        if len(dx_values) == period:
+            adx_values[index] = sum(dx_values) / period
+        elif len(dx_values) > period:
+            previous = adx_values[index - 1]
+            assert previous is not None
+            adx_values[index] = ((previous * (period - 1)) + dx) / period
+    return adx_values, plus_di, minus_di
+
+
+def stoch_rsi(values: Sequence[Number], period: int = 14) -> list[MaybeFloat]:
+    _validate_period(period)
+    rsi_values = rsi_wilder(values, period)
+    result: list[MaybeFloat] = [None] * len(values)
+    for index in range(period - 1, len(values)):
+        window = rsi_values[index - period + 1 : index + 1]
+        if any(value is None for value in window):
+            continue
+        numeric = [float(value) for value in window if value is not None]
+        minimum = min(numeric)
+        maximum = max(numeric)
+        result[index] = (
+            50.0
+            if maximum == minimum
+            else (numeric[-1] - minimum) / (maximum - minimum) * 100
+        )
+    return result
+
+
+def obv(closes: Sequence[Number], volumes: Sequence[Number]) -> list[float]:
+    if len(closes) != len(volumes):
+        raise ValueError("closes and volumes must have the same length")
+    if not closes:
+        return []
+    result = [float(volumes[0])]
+    for index in range(1, len(closes)):
+        previous = result[-1]
+        volume = float(volumes[index])
+        if float(closes[index]) > float(closes[index - 1]):
+            result.append(previous + volume)
+        elif float(closes[index]) < float(closes[index - 1]):
+            result.append(previous - volume)
+        else:
+            result.append(previous)
+    return result
+
+
+def cmf(
+    highs: Sequence[Number],
+    lows: Sequence[Number],
+    closes: Sequence[Number],
+    volumes: Sequence[Number],
+    period: int = 20,
+) -> list[MaybeFloat]:
+    _validate_period(period)
+    if not (len(highs) == len(lows) == len(closes) == len(volumes)):
+        raise ValueError("OHLCV inputs must have the same length")
+    result: list[MaybeFloat] = [None] * len(closes)
+    money_flow: list[float] = []
+    for high, low, close, volume in zip(highs, lows, closes, volumes, strict=True):
+        high_value = float(high)
+        low_value = float(low)
+        close_value = float(close)
+        if high_value == low_value:
+            multiplier = 0.0
+        else:
+            multiplier = (
+                ((close_value - low_value) - (high_value - close_value))
+                / (high_value - low_value)
+            )
+        money_flow.append(multiplier * float(volume))
+    for index in range(period - 1, len(closes)):
+        volume_window = sum(float(value) for value in volumes[index - period + 1 : index + 1])
+        result[index] = (
+            sum(money_flow[index - period + 1 : index + 1]) / volume_window
+            if volume_window
+            else 0.0
+        )
+    return result

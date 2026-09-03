@@ -1,12 +1,16 @@
 import pytest
 
 from app.analysis.indicators import (
+    adx,
     atr,
+    cmf,
     ema,
     macd,
+    obv,
     project_volume_ratio,
     rsi_wilder,
     sma,
+    stoch_rsi,
 )
 from app.analysis.relative_strength import relative_return
 
@@ -70,3 +74,35 @@ def test_projected_volume_ratio_uses_regular_elapsed_minutes() -> None:
         )
         is None
     )
+
+
+def test_adx_identifies_directional_strength() -> None:
+    closes = [100 + i for i in range(50)]
+    highs = [value + 2 for value in closes]
+    lows = [value - 1 for value in closes]
+
+    adx_values, plus_di, minus_di = adx(highs, lows, closes)
+
+    assert adx_values[-1] is not None
+    assert adx_values[-1] > 20
+    assert plus_di[-1] > minus_di[-1]
+
+
+def test_stoch_rsi_is_bounded_and_obv_tracks_price_direction() -> None:
+    values = [100, 101, 102, 101, 103] * 8
+    stoch_values = stoch_rsi(values)
+
+    assert 0 <= stoch_values[-1] <= 100
+    assert obv([100, 101, 100], [10, 20, 30]) == [10.0, 30.0, 0.0]
+
+
+def test_cmf_is_positive_when_closes_are_near_highs() -> None:
+    highs = [11.0] * 20
+    lows = [9.0] * 20
+    closes = [10.8] * 20
+    volumes = [100.0] * 20
+
+    values = cmf(highs, lows, closes, volumes)
+
+    assert values[-1] is not None
+    assert values[-1] > 0

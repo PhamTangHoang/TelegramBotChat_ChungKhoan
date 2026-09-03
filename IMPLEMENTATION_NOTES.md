@@ -23,6 +23,12 @@ the v1.5 business semantics.
 - The vnstock KBS index adapter keeps the last row when the provider emits
   duplicate VNINDEX dates and logs the event; duplicate equity dates remain a
   hard provider-schema failure.
+- Telegram exposes one analysis command, `/analyze SYMBOL`, which combines the
+  v1.5 technical rules with the deterministic PP10Ulti evaluator. `/news SYMBOL`
+  is a separate cached RSS report and never changes the analysis score.
+- PP10 criteria that lack a validated data source are marked
+  `DATA_UNAVAILABLE`; they do not count as passes or failures and never receive
+  fabricated values.
 
 ## Explicit MVP policies
 

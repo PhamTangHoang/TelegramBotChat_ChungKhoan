@@ -25,6 +25,13 @@ class RuleStatus(StrEnum):
     NOT_EVALUATED = "NOT_EVALUATED"
 
 
+class EvaluationStatus(StrEnum):
+    PASS = "PASS"
+    FAIL = "FAIL"
+    NOT_EVALUATED = "NOT_EVALUATED"
+    DATA_UNAVAILABLE = "DATA_UNAVAILABLE"
+
+
 class DataFreshness(StrEnum):
     FRESH = "fresh"
     STALE_CACHE = "stale_cache"
