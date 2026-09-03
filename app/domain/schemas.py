@@ -84,3 +84,22 @@ class AnalysisContext(BaseModel):
     @classmethod
     def normalize_identity(cls, value: str) -> str:
         return value.strip().upper()
+
+
+class IndicatorSnapshot(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    price: Decimal
+    ma20: float | None = None
+    ma50: float | None = None
+    rsi14: float | None = None
+    macd: float | None = None
+    macd_signal: float | None = None
+    macd_histogram: float | None = None
+    atr14: float | None = None
+    volume_ratio_projected: float | None = None
+    elapsed_trading_minutes: int
+    relative_return: float | None = None
+    as_of: datetime
+    is_final: bool
+    price_basis: PriceBasis = PriceBasis.RAW_OHLCV
