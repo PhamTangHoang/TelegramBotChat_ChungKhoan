@@ -352,9 +352,16 @@ class MarketAnalysisService:
         )
 
     def _collect_news(self, session: Session, *, symbol: str, as_of: datetime) -> list[Any]:
-        if self.news_provider is not None and self.settings.news_feed_urls:
-            for item in self.news_provider.fetch(self.settings.news_feed_urls):
-                upsert_news(session, item)
-            session.commit()
+        self.refresh_news_sync(session, now=as_of)
         since = as_of - timedelta(days=1)
         return list(recent_news(session, since=since, symbol=symbol))
+
+    def refresh_news_sync(self, session: Session, *, now: datetime) -> int:
+        if self.news_provider is None or not self.settings.news_feed_urls:
+            return 0
+        count = 0
+        for item in self.news_provider.fetch(self.settings.news_feed_urls):
+            upsert_news(session, item)
+            count += 1
+        session.commit()
+        return count
