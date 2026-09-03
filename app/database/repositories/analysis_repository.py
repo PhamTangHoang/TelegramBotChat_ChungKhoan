@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.audit.snapshot import build_input_hash
@@ -74,3 +75,17 @@ def attach_llm_response(
     run.explanation_conflict = explanation_conflict
     session.flush()
     return run
+
+
+def latest_analysis_run(
+    session: Session,
+    *,
+    symbol: str,
+    exchange: str,
+) -> AnalysisRun | None:
+    return session.scalar(
+        select(AnalysisRun)
+        .where(AnalysisRun.symbol == symbol, AnalysisRun.exchange == exchange)
+        .order_by(AnalysisRun.as_of.desc(), AnalysisRun.id.desc())
+        .limit(1)
+    )

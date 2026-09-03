@@ -35,3 +35,4 @@ def test_data_snapshot_serializes_pydantic_inputs() -> None:
 
     assert snapshot["market_candles"][0]["trading_date"] == "2026-09-03"
     assert snapshot["market_candles"][0]["close"] == "100"
+    assert snapshot["news"] == []

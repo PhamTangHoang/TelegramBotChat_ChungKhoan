@@ -68,9 +68,11 @@ def build_data_snapshot(
     *,
     market_candles: Sequence[Any],
     index_candles: Sequence[Any],
+    news: Sequence[Any] = (),
 ) -> dict[str, list[Any]]:
     """Serialize the exact market and index observations consumed by an analysis."""
     return {
         "market_candles": [canonicalize(candle) for candle in market_candles],
         "index_candles": [canonicalize(candle) for candle in index_candles],
+        "news": [canonicalize(item) for item in news],
     }

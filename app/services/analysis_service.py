@@ -16,7 +16,10 @@ from app.audit.snapshot import build_data_snapshot, canonicalize
 from app.chart.chart_engine import ChartEngine
 from app.data.providers.base import MarketDataProvider
 from app.data.providers.rss import RssProvider
-from app.database.repositories.analysis_repository import create_analysis_run
+from app.database.repositories.analysis_repository import (
+    create_analysis_run,
+    latest_analysis_run,
+)
 from app.database.repositories.candle_repository import (
     finalize_candle,
     finalize_index_candle,
@@ -191,6 +194,11 @@ class MarketAnalysisService:
             rule_result = self.rule_engine.evaluate(
                 indicators,
                 data_freshness=freshness,
+                previous_signal=self._previous_signal(
+                    session,
+                    symbol=symbol,
+                    exchange=exchange,
+                ),
             )
             if freshness == DataFreshness.STALE_CACHE and not self.settings.allow_stale_signal:
                 rule_result = self._stale_disallowed_result(self.settings.rule_version)
@@ -199,6 +207,7 @@ class MarketAnalysisService:
             data_snapshot = build_data_snapshot(
                 market_candles=[*history, current],
                 index_candles=[*index_history, *([current_index] if current_index else [])],
+                news=[self._news_snapshot(item) for item in news],
             )
             provenance = {
                 "provider": type(self.provider).__name__,
@@ -210,6 +219,9 @@ class MarketAnalysisService:
                 "calendar_version": self.settings.calendar_version,
                 "exchange": exchange,
                 "news_count": len(news),
+                "index_provider_timestamp": (
+                    current_index.provider_timestamp if current_index else None
+                ),
             }
             run = create_analysis_run(
                 session,
@@ -362,6 +374,30 @@ class MarketAnalysisService:
         self.refresh_news_sync(session, now=as_of)
         since = as_of - timedelta(days=1)
         return list(recent_news(session, since=since, symbol=symbol))
+
+    @staticmethod
+    def _previous_signal(session: Session, *, symbol: str, exchange: str) -> Signal | None:
+        previous = latest_analysis_run(session, symbol=symbol, exchange=exchange)
+        if previous is None:
+            return None
+        try:
+            return Signal(previous.rule_signal)
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _news_snapshot(item: Any) -> dict[str, Any]:
+        return {
+            "id": item.id,
+            "source": item.source,
+            "title": item.title,
+            "summary": item.summary,
+            "url": item.url,
+            "published_at": item.published_at,
+            "content_hash": item.content_hash,
+            "fetched_at": item.fetched_at,
+            "symbol": item.symbol,
+        }
 
     def refresh_news_sync(self, session: Session, *, now: datetime) -> int:
         if self.news_provider is None or not self.settings.news_feed_urls:
