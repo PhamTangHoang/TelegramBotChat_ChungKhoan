@@ -9,8 +9,9 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.database.models import AnalysisRun, Base
-from app.domain.schemas import IndexCandle, MarketCandle
+from app.domain.schemas import IndexCandle, MarketCandle, NewsItem
 from app.llm.gemini import GeminiError
+from app.llm.schemas import GeminiExplanation
 from app.market.calendar import HOSECalendar
 from app.services.analysis_service import AnalysisUnavailable, MarketAnalysisService
 
@@ -67,6 +68,39 @@ class FailingGemini:
 class FailingChart:
     def render(self, *args: object, **kwargs: object):
         raise RuntimeError("renderer unavailable")
+
+
+class NewsProvider:
+    def fetch(self, feed_urls: tuple[str, ...]) -> list[NewsItem]:
+        return [
+            NewsItem(
+                source="test-feed",
+                title="FPT test headline",
+                summary="Test summary",
+                url="https://example.com/fpt-test",
+                content_hash="a" * 64,
+                fetched_at=datetime(2026, 8, 20, 3, tzinfo=ZoneInfo("UTC")),
+            )
+        ]
+
+
+class CapturingGemini:
+    model = "test-model"
+
+    def __init__(self) -> None:
+        self.event_context = None
+
+    def explain(self, **kwargs: object) -> GeminiExplanation:
+        self.event_context = kwargs["event_context"]
+        return GeminiExplanation(
+            market_summary="Market summary",
+            technical_explanation="Technical explanation",
+            news_context="News context",
+            bull_case="Bull case",
+            bear_case="Bear case",
+            risk="Risk",
+            conclusion="Conclusion",
+        )
 
 
 def settings(*, allow_stale_signal: bool) -> SimpleNamespace:
@@ -137,6 +171,36 @@ def test_gemini_and_chart_failures_keep_saved_technical_result() -> None:
     assert run is not None
     assert run.llm_response is None
     assert output.chart is None
+
+
+def test_gemini_receives_persisted_news_as_serializable_context() -> None:
+    engine, factory = database()
+    gemini = CapturingGemini()
+    config = settings(allow_stale_signal=False)
+    config.news_feed_urls = ("https://example.com/feed",)
+    service = MarketAnalysisService(
+        provider=CompleteProvider(),
+        session_factory=factory,
+        calendar=HOSECalendar(),
+        settings=config,
+        gemini=gemini,
+        news_provider=NewsProvider(),
+    )
+
+    output = service.run_sync(
+        "FPT",
+        now=datetime(2026, 8, 20, 10, tzinfo=ZoneInfo("Asia/Ho_Chi_Minh")),
+    )
+
+    assert output.analysis_run_id is not None
+    assert isinstance(gemini.event_context, list)
+    assert len(gemini.event_context) == 1
+    event = gemini.event_context[0]
+    assert event["source"] == "test-feed"
+    assert event["title"] == "FPT test headline"
+    assert event["url"] == "https://example.com/fpt-test"
+    assert event["content_hash"] == "a" * 64
+    assert event["fetched_at"].startswith("2026-08-20T03:00:00")
 
 
 def test_final_run_rejects_provider_data_without_today() -> None:

@@ -34,7 +34,7 @@ from app.database.repositories.candle_repository import (
 )
 from app.database.repositories.news_repository import recent_news, upsert_news
 from app.domain.enums import AnalysisKind, DataFreshness, Risk, Signal
-from app.domain.schemas import IndexCandle, IndicatorSnapshot, MarketCandle, RuleResult
+from app.domain.schemas import IndexCandle, IndicatorSnapshot, MarketCandle, NewsItem, RuleResult
 from app.llm.gemini import GeminiError, GeminiExplainer, explanation_conflicts_with_signal
 from app.telegram.formatter import format_technical_report
 
@@ -277,7 +277,7 @@ class MarketAnalysisService:
                 try:
                     gemini_explanation = self.gemini.explain(
                         quantitative_context=indicators.model_dump(mode="json"),
-                        event_context=[item.model_dump(mode="json") for item in news],
+                        event_context=[self._news_context(item) for item in news],
                         decision_context=rule_result.model_dump(mode="json"),
                     )
                     explanation_conflict = explanation_conflicts_with_signal(
@@ -470,6 +470,19 @@ class MarketAnalysisService:
             "fetched_at": item.fetched_at,
             "symbol": item.symbol,
         }
+
+    @staticmethod
+    def _news_context(item: Any) -> dict[str, Any]:
+        return NewsItem(
+            source=item.source,
+            title=item.title,
+            summary=item.summary,
+            url=item.url,
+            published_at=item.published_at,
+            content_hash=item.content_hash,
+            symbol=item.symbol,
+            fetched_at=item.fetched_at,
+        ).model_dump(mode="json")
 
     def refresh_news_sync(self, session: Session, *, now: datetime) -> int:
         if self.news_provider is None or not self.settings.news_feed_urls:
