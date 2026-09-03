@@ -166,6 +166,8 @@ class RuleEngine:
             indicators.ma20,
             indicators.ma50,
             indicators.rsi14,
+            indicators.macd,
+            indicators.macd_signal,
             indicators.macd_histogram,
             indicators.atr14,
             indicators.relative_return,
