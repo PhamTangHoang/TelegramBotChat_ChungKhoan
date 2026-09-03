@@ -37,6 +37,9 @@ def test_chart_returns_png_bytes_and_closes_figures() -> None:
     )
 
     assert result.startswith(b"\x89PNG\r\n\x1a\n")
+    import matplotlib.pyplot as plt
+
+    assert plt.get_fignums() == []
 
 
 def test_chart_requires_multiple_observations() -> None:
