@@ -59,6 +59,15 @@ def test_invalid_gemini_response_is_recoverable() -> None:
         explainer.explain(quantitative_context={}, event_context=[], decision_context={})
 
 
+def test_gemini_chat_returns_plain_text() -> None:
+    models = FakeModels(SimpleNamespace(text="Xin chào! Dùng /pt FPT để phân tích."))
+    explainer = GeminiExplainer(
+        api_key="test", model="test-model", client=SimpleNamespace(models=models)
+    )
+
+    assert explainer.chat("xin chào") == "Xin chào! Dùng /pt FPT để phân tích."
+
+
 def test_conflict_flag_does_not_change_primary_signal() -> None:
     assert explanation_conflicts_with_signal(
         explanation(conclusion="Primary signal is BEARISH."), Signal.BULLISH

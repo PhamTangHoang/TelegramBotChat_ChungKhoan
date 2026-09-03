@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import re
+import unicodedata
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -23,6 +25,48 @@ class TelegramAnalysisService(Protocol):
 
     async def market(self) -> str: ...
 
+    async def chat(self, message: str) -> str: ...
+
+
+def _fold_text(value: str) -> str:
+    folded = "".join(
+        character
+        for character in unicodedata.normalize("NFD", value.lower())
+        if unicodedata.category(character) != "Mn"
+    )
+    return folded.replace("đ", "d")
+
+
+def _classify_text(value: str) -> tuple[str, str | None]:
+    folded = _fold_text(value).strip()
+    chart_match = re.search(
+        r"\b(?:chart|bieu do|ve bieu do)\s+(?:ma\s+)?([a-z]{2,5})\b", folded
+    )
+    if chart_match:
+        return "chart", chart_match.group(1).upper()
+
+    analysis_match = re.search(
+        r"\b(?:phan tich(?: ky thuat)?|danh gia|pt)\s+(?:ma\s+)?([a-z]{2,5})\b",
+        folded,
+    )
+    if analysis_match:
+        return "analysis", analysis_match.group(1).upper()
+
+    if "thi truong" in folded or folded in {"market", "trang thai thi truong"}:
+        return "market", None
+
+    if folded in {"xin chao", "chao", "hello", "hi", "help", "tro giup", "menu"}:
+        return "help", None
+
+    if re.fullmatch(r"[a-z]{2,5}", folded) and folded not in {
+        "hello",
+        "chao",
+        "help",
+        "market",
+    }:
+        return "analysis", folded.upper()
+    return "chat", None
+
 
 def build_router(
     service: TelegramAnalysisService,
@@ -32,7 +76,7 @@ def build_router(
     rate_limit_per_minute: int,
 ):
     """Build aiogram handlers without importing aiogram during unit-only imports."""
-    from aiogram import Router
+    from aiogram import F, Router
     from aiogram.filters import Command, CommandObject, CommandStart
     from aiogram.types import Message
 
@@ -99,5 +143,48 @@ def build_router(
         except Exception:
             logger.exception("/market failed")
             await message.answer("Không thể tải trạng thái thị trường lúc này.")
+
+    @router.message(F.text)
+    async def text_handler(message: Message) -> None:
+        if not await authorized(message):
+            return
+        text = (message.text or "").strip()
+        kind, symbol = _classify_text(text)
+        if kind == "help":
+            await message.answer(
+                "VN Stock Analyst Bot hỗ trợ:\n"
+                "• /pt FPT hoặc: phân tích FPT\n"
+                "• /chart FPT hoặc: chart FPT\n"
+                "• /market hoặc: thị trường\n"
+                "Bạn cũng có thể chat tự nhiên để hỏi về cách dùng bot."
+            )
+            return
+        if kind == "market":
+            await send_text_chunks(message.answer, await service.market())
+            return
+        if kind == "analysis" and symbol is not None:
+            await message.answer("⏳ Đang phân tích dữ liệu...")
+            try:
+                report = await service.analyze(symbol)
+                await send_report_with_chart(message, report.text, chart=report.chart)
+            except Exception:
+                logger.exception("natural analysis failed for symbol=%s", symbol)
+                await message.answer("Không thể hoàn tất phân tích lúc này.")
+            return
+        if kind == "chart" and symbol is not None:
+            try:
+                from aiogram.types import BufferedInputFile
+
+                chart = await service.chart(symbol)
+                await message.answer_photo(BufferedInputFile(chart, filename=f"{symbol}.png"))
+            except Exception:
+                logger.exception("natural chart failed for symbol=%s", symbol)
+                await message.answer("Không thể tạo chart lúc này.")
+            return
+        try:
+            await send_text_chunks(message.answer, await service.chat(text))
+        except Exception:
+            logger.exception("natural chat failed")
+            await message.answer("Tạm thời chưa thể trả lời tin nhắn này.")
 
     return router

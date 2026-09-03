@@ -72,9 +72,89 @@ class ExchangeCalendar(ABC):
             if session.regular
         )
 
+    def describe_session(self, value: datetime) -> str:
+        local = (
+            value.replace(tzinfo=self.timezone)
+            if value.tzinfo is None
+            else value.astimezone(self.timezone)
+        )
+        trading_date = local.date()
+        current_time = local.time()
+        regular_sessions = [
+            session for session in self.sessions(trading_date) if session.regular
+        ]
+        regular_hours = " và ".join(
+            f"{_format_time(session.start)}–{_format_time(session.end)}"
+            for session in _merge_display_sessions(regular_sessions)
+        )
+
+        if not self.is_trading_day(trading_date):
+            return f"HOSE: ĐÓNG CỬA\nNgày {trading_date.isoformat()} không có giao dịch."
+
+        current_session = next(
+            (
+                session
+                for session in self.sessions(trading_date)
+                if session.start <= current_time < session.end
+            ),
+            None,
+        )
+        if current_session is not None:
+            state = "ĐANG GIAO DỊCH" if current_session.regular else "HẬU PHIÊN"
+            return (
+                f"HOSE: {state}\n"
+                f"Phiên: {current_session.name} "
+                f"({_format_time(current_session.start)}–{_format_time(current_session.end)})\n"
+                f"Giờ regular: {regular_hours}"
+            )
+
+        next_session = next(
+            (session for session in self.sessions(trading_date) if current_time < session.start),
+            None,
+        )
+        if next_session is not None and any(
+            session.regular and current_time >= session.end for session in regular_sessions
+        ):
+            return (
+                "HOSE: NGHỈ GIỮA PHIÊN\n"
+                f"Phiên tiếp theo: {next_session.name} "
+                f"({_format_time(next_session.start)}–{_format_time(next_session.end)})\n"
+                f"Giờ regular: {regular_hours}"
+            )
+        if next_session is not None:
+            return (
+                "HOSE: CHƯA MỞ\n"
+                f"Phiên tiếp theo: {next_session.name} "
+                f"({_format_time(next_session.start)}–{_format_time(next_session.end)})\n"
+                f"Giờ regular: {regular_hours}"
+            )
+        return f"HOSE: ĐÃ ĐÓNG CỬA\nGiờ regular: {regular_hours}"
+
 
 def _minutes_between(start: time, end: time) -> int:
     return (end.hour * 60 + end.minute) - (start.hour * 60 + start.minute)
+
+
+def _format_time(value: time) -> str:
+    return value.strftime("%H:%M")
+
+
+def _merge_display_sessions(sessions: list[TradingSession]) -> list[TradingSession]:
+    if not sessions:
+        return []
+    merged: list[TradingSession] = [sessions[0]]
+    for session in sessions[1:]:
+        previous = merged[-1]
+        if previous.end == session.start:
+            merged[-1] = TradingSession(
+                name=previous.name,
+                start=previous.start,
+                end=session.end,
+                regular=True,
+            )
+        else:
+            merged.append(session)
+    return merged
 
 
 class HOSECalendar(ExchangeCalendar):

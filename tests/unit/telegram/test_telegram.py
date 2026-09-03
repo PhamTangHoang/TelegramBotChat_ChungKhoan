@@ -7,6 +7,7 @@ from app.domain.enums import AnalysisKind, DataFreshness, Risk, RuleStatus, Sign
 from app.domain.schemas import IndicatorSnapshot, RuleReason, RuleResult
 from app.telegram.access_control import AccessDenied, RateLimiter, WhitelistAccessController
 from app.telegram.formatter import chunk_message, format_technical_report
+from app.telegram.handlers import _classify_text
 
 
 def test_whitelist_and_rate_limit_are_independent() -> None:
@@ -80,3 +81,10 @@ def test_message_chunking_preserves_all_content_and_limit() -> None:
 
     assert all(len(chunk) <= 100 for chunk in chunks)
     assert "".join(chunks).replace("\n", "") == text.replace("\n", "")
+
+
+def test_natural_text_classification_supports_analysis_chart_market_and_help() -> None:
+    assert _classify_text("phân tích mã FPT") == ("analysis", "FPT")
+    assert _classify_text("vẽ biểu đồ VNM") == ("chart", "VNM")
+    assert _classify_text("thị trường hôm nay thế nào") == ("market", None)
+    assert _classify_text("xin chào") == ("help", None)

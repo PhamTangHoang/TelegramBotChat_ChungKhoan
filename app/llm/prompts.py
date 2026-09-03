@@ -15,6 +15,14 @@ This is a private analytical tool, not investment advice, and score is not a
 probability estimate or validated confidence percentage.
 Return only the requested structured JSON object."""
 
+CHAT_SYSTEM_INSTRUCTION = """You are the conversational assistant inside VN Stock Analyst Bot.
+Answer in concise Vietnamese unless the user asks for another language. You can
+explain how the bot works, stock-analysis concepts and the available commands.
+Do not invent current prices, market status or news. For a live technical report,
+ask the user to use /pt SYMBOL or /chart SYMBOL. Do not give personalized buy,
+sell or hold instructions. Keep the response educational and include a brief
+disclaimer when the user asks for an investment decision. Return plain text."""
+
 
 def build_prompt(
     *,
@@ -28,5 +36,14 @@ def build_prompt(
             "\nQuantitative Context:\n" + canonical_json(quantitative_context),
             "\nEvent Context:\n" + canonical_json(event_context),
             "\nDecision Context:\n" + canonical_json(decision_context),
+        )
+    )
+
+
+def build_chat_prompt(message: str) -> str:
+    return "\n".join(
+        (
+            CHAT_SYSTEM_INSTRUCTION,
+            "\nUser message:\n---\n" + message.strip()[:2000] + "\n---",
         )
     )

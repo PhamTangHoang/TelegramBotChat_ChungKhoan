@@ -13,6 +13,9 @@ the v1.5 business semantics.
 - External data and LLM output are untrusted and are validated at boundaries.
 - Telegram access is private by default; `TELEGRAM_PUBLIC_ACCESS=true` explicitly
   enables all-chat access while retaining the per-chat rate limit.
+- Natural-language Telegram shortcuts route analysis/chart/market requests to
+  deterministic services; other plain text uses Gemini as a conversational layer
+  and never owns a stock signal.
 
 ## Explicit MVP policies
 

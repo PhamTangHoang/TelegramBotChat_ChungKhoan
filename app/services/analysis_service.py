@@ -92,6 +92,21 @@ class MarketAnalysisService:
 
         return TelegramReport(text=output.text, chart=output.chart)
 
+    async def chat(self, message: str) -> str:
+        if self.gemini is None:
+            return (
+                "T chưa bật Gemini để chat tự nhiên. Dùng /pt FPT, /chart FPT "
+                "hoặc /market để sử dụng các chức năng chính."
+            )
+        try:
+            return await asyncio.to_thread(self.gemini.chat, message)
+        except GeminiError:
+            logger.warning("Gemini chat unavailable", exc_info=True)
+            return (
+                "Hiện chưa thể trả lời câu chat tự nhiên. Dùng /pt FPT, "
+                "/chart FPT hoặc /market nhé."
+            )
+
     async def chart(self, symbol: str) -> bytes:
         output = await asyncio.to_thread(self.run_sync, symbol, include_gemini=False)
         if output.chart is None:
@@ -100,9 +115,7 @@ class MarketAnalysisService:
 
     async def market(self) -> str:
         now = datetime.now(VIETNAM_TZ)
-        if not self.calendar.is_regular_trading_time(now):
-            return "Thị trường hiện không ở regular trading session."
-        return "Thị trường đang trong regular trading session."
+        return self.calendar.describe_session(now)
 
     def run_sync(
         self,

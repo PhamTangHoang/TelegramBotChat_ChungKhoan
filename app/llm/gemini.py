@@ -4,7 +4,7 @@ import logging
 from typing import Any
 
 from app.domain.enums import Signal
-from app.llm.prompts import build_prompt
+from app.llm.prompts import build_chat_prompt, build_prompt
 from app.llm.schemas import GeminiExplanation
 
 logger = logging.getLogger(__name__)
@@ -72,6 +72,25 @@ class GeminiExplainer:
         except Exception as exc:
             logger.warning("Gemini returned invalid structured explanation", exc_info=True)
             raise GeminiError("Gemini response failed schema validation") from exc
+
+    def chat(self, message: str) -> str:
+        prompt = build_chat_prompt(message)
+        try:
+            from google.genai import types
+
+            response = self.client.models.generate_content(
+                model=self.model,
+                contents=prompt,
+                config=types.GenerateContentConfig(temperature=0.4),
+            )
+        except Exception as exc:  # network/API failures must be recoverable by the caller
+            logger.warning("Gemini chat failed", exc_info=True)
+            raise GeminiError("Gemini chat request failed") from exc
+
+        text = getattr(response, "text", None)
+        if not isinstance(text, str) or not text.strip():
+            raise GeminiError("Gemini chat returned no text")
+        return text.strip()
 
 
 def explanation_conflicts_with_signal(explanation: GeminiExplanation, signal: Signal) -> bool:

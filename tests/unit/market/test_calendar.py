@@ -45,3 +45,11 @@ def test_weekends_and_configured_holidays_are_not_trading_days() -> None:
     assert calendar.is_trading_day(date(2026, 9, 3)) is True
     assert calendar.is_trading_day(holiday) is False
     assert calendar.is_trading_day(date(2026, 9, 5)) is False
+
+
+def test_market_session_description_covers_open_break_and_closed_states() -> None:
+    calendar = HOSECalendar()
+
+    assert "ĐANG GIAO DỊCH" in calendar.describe_session(dt(10, 0))
+    assert "NGHỈ GIỮA PHIÊN" in calendar.describe_session(dt(12, 0))
+    assert "ĐÃ ĐÓNG CỬA" in calendar.describe_session(dt(23, 0))
