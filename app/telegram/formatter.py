@@ -77,6 +77,11 @@ def format_technical_report(
                 f"{criterion.criterion_id}. {_status_icon(criterion.status)} "
                 f"{criterion.name}: {criterion.status.value} — {criterion.reason}"
             )
+            value = getattr(criterion, "value", None)
+            if value is not None:
+                lines.append(f"   Value: {value}")
+            lines.append(f"   Threshold: {criterion.threshold}")
+            lines.append(f"   Source: {criterion.data_source}")
         lines.extend(
             [
                 "",

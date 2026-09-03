@@ -187,6 +187,9 @@ def test_unified_analysis_report_includes_pp10_score_and_data_gaps() -> None:
                 name="Xu hướng MA tổng thể",
                 status=EvaluationStatus.DATA_UNAVAILABLE,
                 reason="Thiếu MA200",
+                value=None,
+                threshold="Price > MA20 > MA200",
+                data_source="not_available",
             )
         ],
         risk_plan=SimpleNamespace(
@@ -212,4 +215,6 @@ def test_unified_analysis_report_includes_pp10_score_and_data_gaps() -> None:
     assert "PP10ULTI" in report
     assert "Score: 1/1" in report
     assert "DATA_UNAVAILABLE" in report
+    assert "Price > MA20 > MA200" in report
+    assert "not_available" in report
     assert "POSITION PLAN" in report

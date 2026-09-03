@@ -27,6 +27,7 @@ def test_structure_calculates_vpvr_cpr_support_and_wyckoff_from_ohlcv() -> None:
     result = analyze_structure(candles[:-1], candles[-1])
 
     assert result.wyckoff_phase == "Markup"
+    assert result.pattern_name != "Bull Flag"
     assert result.vpvr_poc is not None
     assert result.vpvr_hvn is not None
     assert result.vpvr_breakout is not None
