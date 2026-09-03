@@ -75,10 +75,10 @@ class RuleEngine:
             ),
             _RuleEvaluation(
                 "R4",
-                "RSI14 above neutral midpoint",
-                indicators.rsi14 > 50,
+                "RSI14 in the neutral-to-strong range",
+                50 <= indicators.rsi14 <= 70,
                 indicators.rsi14,
-                "> 50",
+                "50-70 inclusive",
             ),
             _RuleEvaluation(
                 "R5",
@@ -193,22 +193,35 @@ class RuleEngine:
         points = 0
         reasons: list[str] = []
 
-        if indicators.rsi14 >= 70:
-            points += 1
-            reasons.append("rsi_overbought")
-        elif indicators.rsi14 <= 30:
+        if indicators.rsi14 < 30:
             points += 1
             reasons.append("rsi_oversold")
+        elif indicators.rsi14 >= 75:
+            points += 2
+            reasons.append("rsi_extreme_overbought")
+        elif indicators.rsi14 > 70:
+            points += 1
+            reasons.append("rsi_overbought")
 
         atr_pct = indicators.atr14 / float(indicators.price)
         if atr_pct > 0.04:
-            points += 1
+            points += 2
             reasons.append("atr_over_4_percent")
+        elif atr_pct > 0.02:
+            points += 1
+            reasons.append("atr_over_2_percent")
 
         distance_to_ma20 = abs(float(indicators.price) - indicators.ma20) / indicators.ma20
         if distance_to_ma20 > 0.10:
-            points += 1
+            points += 2
             reasons.append("price_ma20_distance_over_10_percent")
+        elif distance_to_ma20 > 0.05:
+            points += 1
+            reasons.append("price_ma20_distance_over_5_percent")
+
+        if indicators.price > Decimal(str(indicators.ma20)) and indicators.macd_histogram < 0:
+            points += 1
+            reasons.append("trend_momentum_conflict")
 
         if data_freshness == DataFreshness.STALE_CACHE:
             points += 2

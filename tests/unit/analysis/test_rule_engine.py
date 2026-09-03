@@ -120,6 +120,6 @@ def test_risk_is_independent_from_signal_and_score() -> None:
     )
 
     assert result.signal == Signal.BULLISH
-    assert result.score == 6
+    assert result.score == 5
     assert result.risk == Risk.HIGH
     assert result.risk_points >= 4
