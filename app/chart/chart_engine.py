@@ -57,16 +57,17 @@ class ChartEngine:
 
             buffer = io.BytesIO()
             status = "FINAL" if is_final else "INTRADAY"
-            mpf.plot(
-                frame,
-                type="candle",
-                volume=True,
-                addplot=addplots or None,
-                title=f"{symbol.upper()} | as_of {as_of.isoformat()} | {status}",
-                style="yahoo",
-                figsize=(12, 8),
-                savefig=dict(fname=buffer, dpi=120, bbox_inches="tight"),
-            )
+            plot_kwargs = {
+                "type": "candle",
+                "volume": True,
+                "title": f"{symbol.upper()} | as_of {as_of.isoformat()} | {status}",
+                "style": "yahoo",
+                "figsize": (12, 8),
+                "savefig": dict(fname=buffer, dpi=120, bbox_inches="tight"),
+            }
+            if addplots:
+                plot_kwargs["addplot"] = addplots
+            mpf.plot(frame, **plot_kwargs)
             return buffer.getvalue()
         except ChartError:
             raise
