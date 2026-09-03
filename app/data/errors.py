@@ -16,3 +16,7 @@ class InvalidMarketDataError(DataError):
 
 class NoMarketDataError(DataError):
     """The provider has no usable history for the requested symbol."""
+
+
+class FundamentalDataError(DataError):
+    """A fundamental provider response is unavailable or cannot be normalized."""

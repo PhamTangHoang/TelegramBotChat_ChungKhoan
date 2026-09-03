@@ -73,6 +73,7 @@ class MarketAnalysisService:
         analyzer: TechnicalAnalyzer | None = None,
         rule_engine: RuleEngine | None = None,
         pp10_evaluator: PP10Evaluator | None = None,
+        fundamental_provider: Any | None = None,
         gemini: GeminiExplainer | None = None,
         chart_engine: ChartEngine | None = None,
     ) -> None:
@@ -89,6 +90,7 @@ class MarketAnalysisService:
         self.pp10_evaluator = pp10_evaluator or PP10Evaluator(
             version=getattr(settings, "pp10_version", "1.0.0")
         )
+        self.fundamental_provider = fundamental_provider
         self.gemini = gemini
         self.chart_engine = chart_engine or ChartEngine()
 
@@ -286,6 +288,7 @@ class MarketAnalysisService:
                 )
             else:
                 indicators = self._insufficient_snapshot(current=current, as_of=as_of)
+            indicators = self._add_fundamentals(indicators, symbol)
 
             rule_result = self.rule_engine.evaluate(
                 indicators,
@@ -403,6 +406,30 @@ class MarketAnalysisService:
             logger.info("symbol=%s is outside watchlist; using default HOSE exchange", symbol)
             return "HOSE"
         return self.settings.watchlist_exchanges[index]
+
+    def _add_fundamentals(
+        self, indicators: IndicatorSnapshot, symbol: str
+    ) -> IndicatorSnapshot:
+        if self.fundamental_provider is None:
+            return indicators
+        try:
+            snapshot = self.fundamental_provider.get_snapshot(symbol)
+        except Exception:
+            logger.warning("fundamental data unavailable for %s", symbol, exc_info=True)
+            return indicators
+        fields = (
+            "revenue_growth",
+            "earnings_growth",
+            "eps_growth",
+            "roe",
+            "pe",
+            "pb",
+            "historical_pe",
+            "historical_pb",
+        )
+        return indicators.model_copy(
+            update={field: getattr(snapshot, field, None) for field in fields}
+        )
 
     def _cache_is_fresh(
         self,

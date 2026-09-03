@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.data.errors import NoMarketDataError
+from app.data.providers.fundamentals import FundamentalSnapshot
 from app.database.models import AnalysisRun, Base
 from app.domain.schemas import IndexCandle, MarketCandle, NewsItem
 from app.llm.gemini import GeminiError
@@ -109,6 +110,21 @@ class CapturingGemini:
         )
 
 
+class FundamentalProvider:
+    def get_snapshot(self, symbol: str) -> FundamentalSnapshot:
+        assert symbol == "FPT"
+        return FundamentalSnapshot(
+            revenue_growth=12.0,
+            earnings_growth=15.0,
+            eps_growth=10.0,
+            roe=18.0,
+            pe=12.0,
+            pb=2.0,
+            historical_pe=13.0,
+            historical_pb=2.2,
+        )
+
+
 def settings(*, allow_stale_signal: bool) -> SimpleNamespace:
     return SimpleNamespace(
         watchlist_symbols=("FPT",),
@@ -192,6 +208,23 @@ def test_gemini_and_chart_failures_keep_saved_technical_result() -> None:
     assert run is not None
     assert run.llm_response is None
     assert output.chart is None
+
+
+def test_fundamental_snapshot_is_added_to_pp10_when_provider_is_available() -> None:
+    engine, factory = database()
+    service = MarketAnalysisService(
+        provider=CompleteProvider(),
+        fundamental_provider=FundamentalProvider(),
+        session_factory=factory,
+        calendar=HOSECalendar(),
+        settings=settings(allow_stale_signal=False),
+    )
+
+    output = run_at(service)
+
+    assert output.indicators.revenue_growth == 12.0
+    assert output.indicators.roe == 18.0
+    assert output.pp10_result.criteria[12].status.value == "PASS"
 
 
 def test_analysis_does_not_fetch_or_send_news_context() -> None:

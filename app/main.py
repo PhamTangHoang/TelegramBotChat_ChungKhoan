@@ -24,6 +24,7 @@ async def lifespan(_: FastAPI):
     polling_task: asyncio.Task[Any] | None = None
     if settings.telegram_bot_token:
         try:
+            from app.data.providers.fundamentals import VnstockFundamentalProvider
             from app.data.providers.rss import RssProvider
             from app.data.providers.vnstock import VnstockProvider
             from app.database.connection import SessionLocal
@@ -44,6 +45,7 @@ async def lifespan(_: FastAPI):
                 session_factory=SessionLocal,
                 calendar=calendar,
                 settings=settings,
+                fundamental_provider=VnstockFundamentalProvider(source=settings.vnstock_source),
                 gemini=(
                     GeminiExplainer(
                         api_key=settings.gemini_api_key,
