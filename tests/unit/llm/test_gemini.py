@@ -60,6 +60,18 @@ def test_invalid_gemini_response_is_recoverable() -> None:
         explainer.explain(quantitative_context={}, event_context=[], decision_context={})
 
 
+def test_gemini_accepts_json_wrapped_in_markdown_fence() -> None:
+    payload = explanation().model_dump_json()
+    models = FakeModels(SimpleNamespace(text=f"```json\n{payload}\n```"))
+    explainer = GeminiExplainer(
+        api_key="test", model="test-model", client=SimpleNamespace(models=models)
+    )
+
+    result = explainer.explain(quantitative_context={}, event_context=[], decision_context={})
+
+    assert result.conclusion == "Primary signal is BULLISH."
+
+
 def test_gemini_chat_returns_plain_text() -> None:
     models = FakeModels(SimpleNamespace(text="Xin chào! Dùng /pt FPT để phân tích."))
     explainer = GeminiExplainer(

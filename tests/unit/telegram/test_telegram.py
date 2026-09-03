@@ -128,6 +128,28 @@ def test_news_report_shows_source_times_summary_and_original_link() -> None:
     assert "chưa được bot xác minh độc lập" in report
 
 
+def test_news_report_does_not_render_html_from_existing_stored_summary() -> None:
+    item = SimpleNamespace(
+        source="Example Source",
+        title="FPT headline",
+        summary="<div>Revenue <a href='https://example.test'>grew</a></div>",
+        url="https://example.test/fpt-result",
+        published_at=datetime(2026, 9, 3, 3, 0),
+        fetched_at=datetime(2026, 9, 3, 4, 0),
+    )
+
+    report = format_news_report(
+        symbol="FPT",
+        as_of=datetime(2026, 9, 3, 4, 0),
+        items=[item],
+        status="AVAILABLE",
+    )
+
+    assert "<div>" not in report
+    assert "<a" not in report
+    assert "Revenue grew" in report
+
+
 def test_unified_analysis_report_includes_pp10_score_and_data_gaps() -> None:
     indicators = IndicatorSnapshot(
         price=Decimal("110"),

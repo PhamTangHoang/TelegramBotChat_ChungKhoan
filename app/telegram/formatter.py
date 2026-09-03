@@ -4,6 +4,7 @@ from collections.abc import Iterable
 from datetime import datetime
 from typing import Any
 
+from app.data.news_text import sanitize_news_text
 from app.domain.enums import AnalysisKind, DataFreshness, EvaluationStatus, RuleStatus, Signal
 
 DISCLAIMER = (
@@ -124,15 +125,17 @@ def format_news_report(
         lines.append("Chưa có tin tức phù hợp trong khoảng thời gian đã chọn.")
     else:
         for index, item in enumerate(news_items, start=1):
+            title = sanitize_news_text(getattr(item, "title", ""), max_length=500)
+            source = sanitize_news_text(getattr(item, "source", ""), max_length=128)
             lines.extend(
                 [
-                    f"{index}. {getattr(item, 'title', 'Không có tiêu đề')}",
-                    f"Nguồn: {getattr(item, 'source', 'Không rõ')}",
+                    f"{index}. {title or 'Không có tiêu đề'}",
+                    f"Nguồn: {source or 'Không rõ'}",
                     f"Đăng lúc: {_format_datetime(getattr(item, 'published_at', None))}",
                     f"Bot lấy lúc: {_format_datetime(getattr(item, 'fetched_at', None))}",
                 ]
             )
-            summary = getattr(item, "summary", None)
+            summary = sanitize_news_text(getattr(item, "summary", ""), max_length=2000)
             if summary:
                 lines.append(f"Tóm tắt: {summary}")
             url = getattr(item, "url", None)

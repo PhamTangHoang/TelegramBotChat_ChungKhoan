@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
+from app.data.news_text import sanitize_news_text
 from app.domain.schemas import NewsItem
 
 logger = logging.getLogger(__name__)
@@ -54,9 +55,12 @@ class RssProvider:
                 continue
             try:
                 parsed = self.parser(normalized_feed_url)
-                source = str(getattr(parsed.feed, "title", "") or normalized_feed_url)[:128]
+                source = sanitize_news_text(
+                    getattr(parsed.feed, "title", "") or normalized_feed_url,
+                    max_length=128,
+                )
                 for entry in getattr(parsed, "entries", []):
-                    title = str(entry.get("title", "")).strip()
+                    title = sanitize_news_text(entry.get("title", ""), max_length=500)
                     url = _normalize_url(str(entry.get("link", "")).strip())
                     if not title or url is None or not self._domain_allowed(url):
                         if title and url is None:
@@ -65,7 +69,7 @@ class RssProvider:
                     if url in seen_urls:
                         continue
                     seen_urls.add(url)
-                    summary = str(entry.get("summary", "")).strip() or None
+                    summary = sanitize_news_text(entry.get("summary", ""), max_length=2000) or None
                     published_at = _published_at(entry)
                     content_hash = hashlib.sha256(
                         f"{title}\n{summary or ''}\n{url}".encode()

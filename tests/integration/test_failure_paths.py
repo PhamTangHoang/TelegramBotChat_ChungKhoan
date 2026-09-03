@@ -8,6 +8,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.data.errors import NoMarketDataError
 from app.database.models import AnalysisRun, Base
 from app.domain.schemas import IndexCandle, MarketCandle, NewsItem
 from app.llm.gemini import GeminiError
@@ -53,6 +54,11 @@ class CompleteProvider:
 class FailingProvider:
     def get_ohlcv(self, *args: object, **kwargs: object):
         raise TimeoutError("provider timeout")
+
+
+class EmptySymbolProvider(FailingProvider):
+    def get_ohlcv(self, symbol: str, *args: object, **kwargs: object):
+        raise NoMarketDataError(f"No market data for {symbol}")
 
     def get_market_index(self, *args: object, **kwargs: object):
         raise TimeoutError("provider timeout")
@@ -150,6 +156,21 @@ def test_provider_failure_without_stale_policy_does_not_create_analysis() -> Non
 
     with Session(engine) as db:
         assert db.scalar(select(AnalysisRun)) is None
+
+
+def test_missing_symbol_data_exposes_safe_user_message() -> None:
+    engine, factory = database()
+    service = MarketAnalysisService(
+        provider=EmptySymbolProvider(),
+        session_factory=factory,
+        calendar=HOSECalendar(),
+        settings=settings(allow_stale_signal=False),
+    )
+
+    with pytest.raises(AnalysisUnavailable) as error:
+        run_at(service)
+
+    assert error.value.user_message == "Mã FPT hiện không có dữ liệu giá từ nguồn dữ liệu."
 
 
 def test_gemini_and_chart_failures_keep_saved_technical_result() -> None:

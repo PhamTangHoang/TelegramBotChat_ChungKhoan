@@ -3,7 +3,7 @@ from datetime import date, datetime
 import logging
 from typing import Any, Callable
 
-from app.data.errors import ProviderSchemaError
+from app.data.errors import NoMarketDataError, ProviderSchemaError
 from app.data.normalizer import normalize_index, normalize_ohlcv
 from app.data.providers.base import MarketDataProvider
 from app.data.providers.resilience import CircuitBreaker, retry_call
@@ -53,7 +53,13 @@ class VnstockProvider(MarketDataProvider):
                 source=self.source,
             )
 
-        rows = self._fetch(operation)
+        try:
+            rows = self._fetch(operation)
+        except Exception as exc:
+            if _contains_no_data_error(exc):
+                raise NoMarketDataError(f"No market data for {symbol}") from exc
+            raise
+        rows = _deduplicate_ohlcv_rows(rows)
         return normalize_ohlcv(
             rows,
             symbol=symbol,
@@ -80,6 +86,14 @@ class VnstockProvider(MarketDataProvider):
 
 
 def _deduplicate_index_rows(rows: Any) -> list[Any]:
+    return _deduplicate_rows(rows, kind="index")
+
+
+def _deduplicate_ohlcv_rows(rows: Any) -> list[Any]:
+    return _deduplicate_rows(rows, kind="equity")
+
+
+def _deduplicate_rows(rows: Any, *, kind: str) -> list[Any]:
     if hasattr(rows, "to_dict"):
         records = rows.to_dict(orient="records")
     elif isinstance(rows, Mapping):
@@ -93,7 +107,9 @@ def _deduplicate_index_rows(rows: Any) -> list[Any]:
             return records
         key = _index_date_key(row)
         if key in deduplicated:
-            logger.warning("vnstock returned duplicate index date=%s; keeping last row", key)
+            logger.warning(
+                "vnstock returned duplicate %s date=%s; keeping last row", kind, key
+            )
         deduplicated[key] = row
     return list(deduplicated.values())
 
@@ -115,3 +131,27 @@ def _index_date_key(row: Mapping[str, Any]) -> object:
                 return f"raw:{value}"
         return f"raw:{value!r}"
     return f"missing:{id(row)}"
+
+
+def _contains_no_data_error(error: BaseException) -> bool:
+    """Recognize vnstock's wrapped empty-result error without masking other failures."""
+    pending: list[BaseException] = [error]
+    seen: set[int] = set()
+    while pending:
+        current = pending.pop()
+        if id(current) in seen:
+            continue
+        seen.add(id(current))
+        message = str(current).lower()
+        if "dữ liệu trống" in message or "no data" in message or "empty data" in message:
+            return True
+        cause = current.__cause__ or current.__context__
+        if cause is not None:
+            pending.append(cause)
+        last_attempt = getattr(current, "last_attempt", None)
+        exception = getattr(last_attempt, "exception", None)
+        if callable(exception):
+            nested = exception()
+            if nested is not None:
+                pending.append(nested)
+    return False

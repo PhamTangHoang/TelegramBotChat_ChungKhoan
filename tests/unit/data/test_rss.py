@@ -30,6 +30,25 @@ def test_rss_provider_normalizes_entries_and_hashes_content() -> None:
     assert len(result[0].content_hash) == 64
 
 
+def test_rss_provider_sanitizes_html_summary_before_storage() -> None:
+    parsed = SimpleNamespace(
+        feed=SimpleNamespace(title="Example Source"),
+        entries=[
+            {
+                "title": "<b>FPT</b> publishes results",
+                "summary": "<div>Revenue grew &amp; margins improved.<br>Read more</div>",
+                "link": "https://example.test/fpt",
+            }
+        ],
+    )
+    provider = RssProvider(parser=lambda _: parsed)
+
+    result = provider.fetch(["https://example.test/rss"])
+
+    assert result[0].title == "FPT publishes results"
+    assert result[0].summary == "Revenue grew & margins improved.\nRead more"
+
+
 def test_rss_provider_skips_invalid_article_links() -> None:
     parsed = SimpleNamespace(
         feed=SimpleNamespace(title="Example Source"),

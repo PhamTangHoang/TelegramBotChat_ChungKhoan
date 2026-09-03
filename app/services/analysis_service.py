@@ -16,6 +16,7 @@ from app.analysis.pp10 import PP10Evaluator
 from app.analysis.rule_engine import RuleEngine
 from app.audit.snapshot import build_data_snapshot, canonicalize
 from app.chart.chart_engine import ChartEngine
+from app.data.errors import NoMarketDataError
 from app.data.providers.base import MarketDataProvider
 from app.database.repositories.analysis_repository import (
     create_analysis_run,
@@ -42,7 +43,9 @@ VIETNAM_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 
 
 class AnalysisUnavailable(RuntimeError):
-    pass
+    def __init__(self, message: str, *, user_message: str | None = None) -> None:
+        super().__init__(message)
+        self.user_message = user_message
 
 
 @dataclass(frozen=True)
@@ -171,6 +174,12 @@ class MarketAnalysisService:
                 except AnalysisUnavailable:
                     session.rollback()
                     raise
+                except NoMarketDataError:
+                    session.rollback()
+                    raise AnalysisUnavailable(
+                        f"No market data for {symbol}",
+                        user_message=f"Mã {symbol} hiện không có dữ liệu giá từ nguồn dữ liệu.",
+                    ) from None
                 except Exception:
                     session.rollback()
                     if not self.settings.allow_stale_signal:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 from copy import deepcopy
 from typing import Any
@@ -86,7 +87,7 @@ class GeminiExplainer:
             text = getattr(response, "text", None)
             if not isinstance(text, str) or not text.strip():
                 raise ValueError("Gemini returned no structured content")
-            return GeminiExplanation.model_validate_json(text)
+            return _parse_explanation_text(text)
         except Exception as exc:
             logger.warning("Gemini returned invalid structured explanation", exc_info=True)
             raise GeminiError("Gemini response failed schema validation") from exc
@@ -109,6 +110,23 @@ class GeminiExplainer:
         if not isinstance(text, str) or not text.strip():
             raise GeminiError("Gemini chat returned no text")
         return text.strip()
+
+
+def _parse_explanation_text(text: str) -> GeminiExplanation:
+    """Parse JSON even when a provider wraps it in Markdown or short prose."""
+    candidate = text.strip()
+    if candidate.startswith("```"):
+        first_newline = candidate.find("\n")
+        if first_newline >= 0:
+            candidate = candidate[first_newline + 1 :].strip()
+        if candidate.endswith("```"):
+            candidate = candidate[:-3].rstrip()
+
+    start = candidate.find("{")
+    if start < 0:
+        raise ValueError("Gemini response does not contain a JSON object")
+    payload, _ = json.JSONDecoder().raw_decode(candidate[start:])
+    return GeminiExplanation.model_validate(payload)
 
 
 def explanation_conflicts_with_signal(explanation: GeminiExplanation, signal: Signal) -> bool:

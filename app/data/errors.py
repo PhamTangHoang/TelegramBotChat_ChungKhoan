@@ -12,3 +12,7 @@ class ProviderSemanticError(DataError):
 
 class InvalidMarketDataError(DataError):
     """A parsed market row violates market-data invariants."""
+
+
+class NoMarketDataError(DataError):
+    """The provider has no usable history for the requested symbol."""

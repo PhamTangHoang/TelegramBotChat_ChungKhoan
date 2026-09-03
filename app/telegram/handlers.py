@@ -33,6 +33,11 @@ class TelegramNewsService(Protocol):
     async def report(self, symbol: str | None = None) -> str: ...
 
 
+def _user_error_message(error: Exception, fallback: str) -> str:
+    message = getattr(error, "user_message", None)
+    return message if isinstance(message, str) and message.strip() else fallback
+
+
 def _fold_text(value: str) -> str:
     folded = "".join(
         character
@@ -140,9 +145,11 @@ def build_router(
         try:
             report = await service.analyze(symbol)
             await send_report_with_chart(message, report.text, chart=report.chart)
-        except Exception:
+        except Exception as exc:
             logger.exception("/analyze failed for symbol=%s", symbol)
-            await message.answer("Không thể hoàn tất phân tích lúc này.")
+            await message.answer(
+                _user_error_message(exc, "Không thể hoàn tất phân tích lúc này.")
+            )
 
     @router.message(Command("chart"))
     async def chart_handler(message: Message, command: CommandObject) -> None:
@@ -157,9 +164,9 @@ def build_router(
             from aiogram.types import BufferedInputFile
 
             await message.answer_photo(BufferedInputFile(chart, filename=f"{symbol}.png"))
-        except Exception:
+        except Exception as exc:
             logger.exception("/chart failed for symbol=%s", symbol)
-            await message.answer("Không thể tạo chart lúc này.")
+            await message.answer(_user_error_message(exc, "Không thể tạo chart lúc này."))
 
     @router.message(Command("market"))
     async def market_handler(message: Message) -> None:
@@ -212,9 +219,11 @@ def build_router(
             try:
                 report = await service.analyze(symbol)
                 await send_report_with_chart(message, report.text, chart=report.chart)
-            except Exception:
+            except Exception as exc:
                 logger.exception("natural analyze failed for symbol=%s", symbol)
-                await message.answer("Không thể hoàn tất phân tích lúc này.")
+                await message.answer(
+                    _user_error_message(exc, "Không thể hoàn tất phân tích lúc này.")
+                )
             return
         if kind == "chart" and symbol is not None:
             try:
@@ -222,9 +231,9 @@ def build_router(
 
                 chart = await service.chart(symbol)
                 await message.answer_photo(BufferedInputFile(chart, filename=f"{symbol}.png"))
-            except Exception:
+            except Exception as exc:
                 logger.exception("natural chart failed for symbol=%s", symbol)
-                await message.answer("Không thể tạo chart lúc này.")
+                await message.answer(_user_error_message(exc, "Không thể tạo chart lúc này."))
             return
         try:
             await send_text_chunks(message.answer, await service.chat(text))
