@@ -219,7 +219,21 @@ class RuleEngine:
             points += 1
             reasons.append("price_ma20_distance_over_5_percent")
 
-        if indicators.price > Decimal(str(indicators.ma20)) and indicators.macd_histogram < 0:
+        conflict = any(
+            [
+                (
+                    indicators.price > Decimal(str(indicators.ma20))
+                    and indicators.macd_histogram < 0
+                ),
+                (
+                    indicators.price < Decimal(str(indicators.ma20))
+                    and indicators.macd_histogram > 0
+                ),
+                indicators.ma20 > indicators.ma50 and indicators.relative_return <= 0,
+                indicators.ma20 < indicators.ma50 and indicators.relative_return > 0,
+            ]
+        )
+        if conflict:
             points += 1
             reasons.append("trend_momentum_conflict")
 
