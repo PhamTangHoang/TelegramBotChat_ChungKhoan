@@ -253,3 +253,21 @@ def test_symbol_outside_scheduler_watchlist_defaults_to_hose() -> None:
     )
 
     assert output.symbol == "VCB"
+
+
+def test_market_report_includes_latest_index_snapshot_when_available() -> None:
+    engine, factory = database()
+    service = MarketAnalysisService(
+        provider=CompleteProvider(),
+        session_factory=factory,
+        calendar=HOSECalendar(),
+        settings=settings(allow_stale_signal=False),
+    )
+
+    report = service.market_sync(
+        now=datetime(2026, 8, 20, 10, tzinfo=ZoneInfo("Asia/Ho_Chi_Minh"))
+    )
+
+    assert "VN-Index" in report
+    assert "Phiên gần nhất" in report
+    assert "Xu hướng" in report

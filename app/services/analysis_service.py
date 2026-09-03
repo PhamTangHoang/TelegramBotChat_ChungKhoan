@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy.orm import Session
 
 from app.analysis.analyzer import TechnicalAnalyzer
+from app.analysis.indicators import sma
 from app.analysis.pp10 import PP10Evaluator
 from app.analysis.rule_engine import RuleEngine
 from app.audit.snapshot import build_data_snapshot, canonicalize
@@ -119,8 +120,57 @@ class MarketAnalysisService:
         return output.chart
 
     async def market(self) -> str:
-        now = datetime.now(VIETNAM_TZ)
-        return self.calendar.describe_session(now)
+        return await asyncio.to_thread(self.market_sync)
+
+    def market_sync(self, *, now: datetime | None = None) -> str:
+        as_of = now or datetime.now(VIETNAM_TZ)
+        if as_of.tzinfo is None:
+            as_of = as_of.replace(tzinfo=VIETNAM_TZ)
+        as_of = as_of.astimezone(VIETNAM_TZ)
+        session_report = self.calendar.describe_session(as_of)
+        try:
+            rows = list(
+                self.provider.get_market_index(
+                    "VNINDEX",
+                    as_of.date() - timedelta(days=400),
+                    as_of.date(),
+                    is_final=not self.calendar.is_regular_trading_time(as_of),
+                )
+            )
+        except Exception:
+            logger.warning("market snapshot unavailable", exc_info=True)
+            return f"{session_report}\n\nVN-Index: chưa lấy được dữ liệu hiện tại."
+        if not rows:
+            return f"{session_report}\n\nVN-Index: chưa có dữ liệu."
+
+        rows.sort(key=lambda row: row.trading_date)
+        closes = [float(row.close) for row in rows]
+        latest = rows[-1]
+        ma20 = sma(closes, 20)[-1]
+        ma50 = sma(closes, 50)[-1]
+        if ma20 is None or ma50 is None:
+            trend = "Chưa đủ lịch sử để xác định"
+        elif closes[-1] > ma20 > ma50:
+            trend = "Tăng"
+        elif closes[-1] < ma20 < ma50:
+            trend = "Giảm"
+        else:
+            trend = "Chưa xác nhận"
+        latest_line = (
+            f"VN-Index — Phiên gần nhất ({latest.trading_date.isoformat()}): "
+            f"{latest.close:.2f}"
+        )
+        return "\n".join(
+            (
+                session_report,
+                "",
+                latest_line,
+                f"MA20: {ma20:.2f}" if ma20 is not None else "MA20: N/A",
+                f"MA50: {ma50:.2f}" if ma50 is not None else "MA50: N/A",
+                f"Xu hướng: {trend}",
+                "Lưu ý: snapshot theo dữ liệu provider, không phải realtime.",
+            )
+        )
 
     def run_sync(
         self,
