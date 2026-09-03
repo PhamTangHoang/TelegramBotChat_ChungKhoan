@@ -89,7 +89,7 @@ class AnalysisContext(BaseModel):
 class IndicatorSnapshot(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    price: Decimal
+    price: Decimal = Field(gt=0)
     ma20: float | None = None
     ma50: float | None = None
     rsi14: float | None = None
@@ -98,7 +98,7 @@ class IndicatorSnapshot(BaseModel):
     macd_histogram: float | None = None
     atr14: float | None = None
     volume_ratio_projected: float | None = None
-    elapsed_trading_minutes: int
+    elapsed_trading_minutes: int = Field(ge=0)
     relative_return: float | None = None
     as_of: datetime
     is_final: bool

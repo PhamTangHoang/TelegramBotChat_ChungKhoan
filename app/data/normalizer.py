@@ -92,6 +92,8 @@ def normalize_ohlcv(
         )
 
     normalized_rows = [_normalized_row(row) for row in _records(rows)]
+    if not normalized_rows:
+        raise ProviderSchemaError("provider OHLCV response is empty")
     result: list[MarketCandle] = []
     seen_dates: set[date] = set()
     for row in normalized_rows:
@@ -129,6 +131,8 @@ def normalize_ohlcv(
 
 def normalize_index(rows: Any, *, index_code: str, source: str, is_final: bool = False) -> list[IndexCandle]:
     normalized_rows = [_normalized_row(row) for row in _records(rows)]
+    if not normalized_rows:
+        raise ProviderSchemaError("provider index response is empty")
     result: list[IndexCandle] = []
     seen_dates: set[date] = set()
     for row in normalized_rows:

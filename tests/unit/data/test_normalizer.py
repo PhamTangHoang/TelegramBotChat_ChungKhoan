@@ -78,3 +78,13 @@ def test_normalizer_rejects_unknown_volume_semantics() -> None:
             source="fixture",
             volume_semantics="unknown",
         )
+
+
+def test_normalizer_rejects_empty_provider_response() -> None:
+    with pytest.raises(ProviderSchemaError, match="empty"):
+        normalize_ohlcv(
+            [],
+            symbol="FPT",
+            exchange="HOSE",
+            source="fixture",
+        )
