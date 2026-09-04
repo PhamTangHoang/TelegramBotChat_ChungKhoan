@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
 
 from app.domain.enums import EvaluationStatus
@@ -571,10 +572,19 @@ class PP10Evaluator:
         target = pivot + (pivot - stop) * 2
         risk = max(0.01, pivot - stop)
         plan = PP10RiskPlan(
-            entry_zone=f"{pivot * 0.98:.2f}–{pivot * 1.02:.2f} (tham chiếu)",
-            add_zone=f"Trên {pivot * 1.02:.2f} khi breakout được xác nhận",
-            stop_loss=f"Dưới {stop:.2f} hoặc dưới cấu trúc hỗ trợ",
-            target=f"Khoảng {target:.2f} theo R:R 2:1",
+            entry_zone=(
+                f"{_format_vnd_per_share(pivot * 0.98)}–"
+                f"{_format_vnd_per_share(pivot * 1.02)} (tham chiếu)"
+            ),
+            add_zone=(
+                f"Trên {_format_vnd_per_share(pivot * 1.02)} "
+                "khi breakout được xác nhận"
+            ),
+            stop_loss=(
+                f"Dưới {_format_vnd_per_share(stop)} "
+                "hoặc dưới cấu trúc hỗ trợ"
+            ),
+            target=f"Khoảng {_format_vnd_per_share(target)} theo R:R 2:1",
             risk_reward=f"1:{(target - pivot) / risk:.1f}",
         )
         return self._criterion(
@@ -638,3 +648,13 @@ def _unavailable_risk_plan() -> PP10RiskPlan:
         target="Chưa xác định — cần kháng cự/cấu trúc giá",
         risk_reward="Chưa xác định",
     )
+
+
+def _format_vnd_per_share(value: float) -> str:
+    try:
+        amount = (Decimal(str(value)) * Decimal("1000")).quantize(
+            Decimal("1"), rounding=ROUND_HALF_UP
+        )
+    except (InvalidOperation, TypeError, ValueError):
+        return "N/A VND/cổ phiếu"
+    return f"{amount:,.0f}".replace(",", ".") + " VND/cổ phiếu"

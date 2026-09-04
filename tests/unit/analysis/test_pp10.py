@@ -91,3 +91,20 @@ def test_pp10_explains_which_long_ma_inputs_are_missing() -> None:
 
     assert result.criteria[0].status == EvaluationStatus.DATA_UNAVAILABLE
     assert result.criteria[0].reason == "Thiếu MA150, MA200; cần tối thiểu 200 phiên lịch sử."
+
+
+def test_pp10_formats_position_plan_prices_as_vnd() -> None:
+    result = PP10Evaluator().evaluate(
+        snapshot(
+            wyckoff_phase="Markup",
+            pattern_name="VCP",
+            pattern_quality=0.8,
+            pivot_price=108.0,
+            support_price=100.0,
+            resistance_price=110.0,
+        )
+    )
+
+    assert "105.840 VND/cổ phiếu" in result.risk_plan.entry_zone
+    assert "110.160 VND/cổ phiếu" in result.risk_plan.add_zone
+    assert "99.000 VND/cổ phiếu" in result.risk_plan.stop_loss

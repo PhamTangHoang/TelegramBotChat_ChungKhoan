@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from datetime import datetime
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
 
 from app.data.news_text import sanitize_news_text
@@ -31,8 +32,8 @@ def format_technical_report(
         f"Status: {analysis_kind.value} / {'FINAL' if is_final else 'NOT FINAL'}",
         f"Data: {data_freshness.value}",
         "",
-        f"Price: {indicators.price}",
-        "Đơn vị giá: nghìn VND/cổ phiếu (22.25 = 22.250 VND)",
+        f"Price: {_price_per_share(indicators.price)}",
+        "Đơn vị giá: VND/cổ phiếu (đã quy đổi từ dữ liệu nghìn VND của vnstock)",
         "",
         "TREND",
         _reason_line(rule_result, "R1"),
@@ -42,7 +43,7 @@ def format_technical_report(
         "MOMENTUM",
         f"• RSI14: {_number(indicators.rsi14)}",
         f"• MACD Histogram: {_number(indicators.macd_histogram)}",
-        f"• ATR14: {_number(indicators.atr14)}",
+        f"• ATR14: {_price_per_share(indicators.atr14)}",
         "",
         "VOLUME",
         f"• Volume Ratio (projected): {_number(indicators.volume_ratio_projected)}",
@@ -80,14 +81,16 @@ def format_technical_report(
             )
             value = getattr(criterion, "value", None)
             if value is not None:
-                lines.append(f"   Value: {value}")
+                lines.append(
+                    f"   Value: {_format_criterion_value(criterion.criterion_id, value)}"
+                )
             lines.append(f"   Threshold: {criterion.threshold}")
             lines.append(f"   Source: {criterion.data_source}")
         lines.extend(
             [
                 "",
                 "POSITION PLAN",
-                "• Đơn vị các mức giá: nghìn VND/cổ phiếu",
+                "• Đơn vị các mức giá: VND/cổ phiếu",
                 f"• Vùng mua: {pp10.risk_plan.entry_zone}",
                 f"• Vùng gia tăng: {pp10.risk_plan.add_zone}",
                 f"• Stop-loss: {pp10.risk_plan.stop_loss}",
@@ -184,11 +187,53 @@ def _reason_line(rule_result: Any, rule_id: str) -> str:
     if reason is None:
         return f"• {rule_id}: unavailable"
     icon = "✓" if reason.status == RuleStatus.PASS else "✗"
-    return f"• {icon} {reason.message}: {reason.status.value} ({_number(reason.value)})"
+    value = (
+        _price_per_share(reason.value)
+        if rule_id in {"R1", "R2", "R3"}
+        else _number(reason.value)
+    )
+    return f"• {icon} {reason.message}: {reason.status.value} ({value})"
 
 
 def _number(value: Any) -> str:
     return "N/A" if value is None else str(value)
+
+
+def _price_per_share(value: Any) -> str:
+    formatted = _format_vnd(value)
+    return "N/A" if formatted == "N/A" else f"{formatted}/cổ phiếu"
+
+
+def _format_vnd(value: Any) -> str:
+    if value is None:
+        return "N/A"
+    try:
+        amount = (Decimal(str(value)) * Decimal("1000")).quantize(
+            Decimal("1"), rounding=ROUND_HALF_UP
+        )
+    except (InvalidOperation, TypeError, ValueError):
+        return "N/A"
+    return f"{amount:,.0f}".replace(",", ".") + " VND"
+
+
+_PRICE_FIELDS_BY_CRITERION = {
+    "1": {"price", "ma20", "ma50", "ma150", "ma200"},
+    "4": {"pivot"},
+    "7": {"poc", "hvn"},
+    "8": {"weekly_top", "monthly_top"},
+    "16": {"pivot", "support", "atr"},
+}
+
+
+def _format_criterion_value(criterion_id: str, value: Any) -> str:
+    price_fields = _PRICE_FIELDS_BY_CRITERION.get(criterion_id, set())
+    if not isinstance(value, Mapping):
+        return _number(value)
+    fields = []
+    for key, item in value.items():
+        display = _price_per_share(item) if key in price_fields else _number(item)
+        fields.append(f"{key}: {display}")
+    return ", ".join(fields)
 
 
 def _status_icon(status: EvaluationStatus) -> str:
