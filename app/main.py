@@ -50,6 +50,7 @@ async def lifespan(_: FastAPI):
                     GeminiExplainer(
                         api_key=settings.gemini_api_key,
                         model=settings.gemini_model,
+                        timeout_seconds=settings.gemini_timeout_seconds,
                     )
                     if settings.gemini_api_key
                     else None

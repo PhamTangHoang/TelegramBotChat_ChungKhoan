@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
 
@@ -79,6 +80,19 @@ def test_gemini_chat_returns_plain_text() -> None:
     )
 
     assert explainer.chat("xin chào") == "Xin chào! Dùng /pt FPT để phân tích."
+
+
+def test_gemini_client_uses_a_bounded_http_timeout() -> None:
+    fake_client = object()
+    with patch("google.genai.Client", return_value=fake_client) as client_factory:
+        explainer = GeminiExplainer(
+            api_key="test", model="test-model", timeout_seconds=8
+        )
+
+        assert explainer.client is fake_client
+
+    http_options = client_factory.call_args.kwargs["http_options"]
+    assert http_options.timeout == 8000
 
 
 def test_conflict_flag_does_not_change_primary_signal() -> None:

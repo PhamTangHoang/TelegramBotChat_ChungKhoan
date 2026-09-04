@@ -34,20 +34,34 @@ class GeminiError(RuntimeError):
 
 
 class GeminiExplainer:
-    def __init__(self, *, api_key: str, model: str, client: Any | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        api_key: str,
+        model: str,
+        client: Any | None = None,
+        timeout_seconds: float = 8.0,
+    ) -> None:
         if not client and not api_key.strip():
             raise ValueError("Gemini API key is required for the live explainer")
+        if timeout_seconds <= 0:
+            raise ValueError("Gemini timeout must be positive")
         self.model = model
         self._client = client
         self._api_key = api_key
+        self._timeout_ms = int(timeout_seconds * 1000)
 
     @property
     def client(self) -> Any:
         if self._client is None:
             try:
                 from google import genai
+                from google.genai import types
 
-                self._client = genai.Client(api_key=self._api_key)
+                self._client = genai.Client(
+                    api_key=self._api_key,
+                    http_options=types.HttpOptions(timeout=self._timeout_ms),
+                )
             except Exception as exc:  # provider import/configuration is an external boundary
                 raise GeminiError("unable to initialize Gemini client") from exc
         return self._client
