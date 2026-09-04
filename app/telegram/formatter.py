@@ -146,6 +146,19 @@ def _pp10_action_plan(pp10: Any) -> list[str]:
     ]
 
 
+def format_gemini_explanation(gemini: Any) -> str:
+    return "\n".join(
+        (
+            "GIẢI THÍCH GEMINI",
+            f"• Tóm tắt kỹ thuật: {gemini.technical_explanation}",
+            f"• Kịch bản tích cực: {gemini.bull_case}",
+            f"• Kịch bản tiêu cực: {gemini.bear_case}",
+            f"• Rủi ro: {gemini.risk}",
+            f"• Kết luận: {gemini.conclusion}",
+        )
+    )
+
+
 def format_technical_report(
     *,
     symbol: str,
@@ -250,17 +263,7 @@ def format_technical_report(
         )
 
     if gemini is not None:
-        lines.extend(
-            [
-                "",
-                "GIẢI THÍCH GEMINI",
-                f"• Tóm tắt kỹ thuật: {gemini.technical_explanation}",
-                f"• Kịch bản tích cực: {gemini.bull_case}",
-                f"• Kịch bản tiêu cực: {gemini.bear_case}",
-                f"• Rủi ro: {gemini.risk}",
-                f"• Kết luận: {gemini.conclusion}",
-            ]
-        )
+        lines.extend(["", format_gemini_explanation(gemini)])
 
     lines.extend(["", DISCLAIMER])
     return "\n".join(lines)

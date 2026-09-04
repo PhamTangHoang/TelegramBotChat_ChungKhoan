@@ -19,6 +19,7 @@ from app.audit.snapshot import build_data_snapshot, canonicalize
 from app.chart.chart_engine import ChartEngine
 from app.data.errors import NoMarketDataError
 from app.data.providers.base import MarketDataProvider
+from app.database.models import AnalysisRun
 from app.database.repositories.analysis_repository import (
     create_analysis_run,
     latest_analysis_run,
@@ -37,7 +38,7 @@ from app.database.repositories.candle_repository import (
 from app.domain.enums import AnalysisKind, DataFreshness, Risk, Signal
 from app.domain.schemas import IndexCandle, IndicatorSnapshot, MarketCandle, PP10Result, RuleResult
 from app.llm.gemini import GeminiError, GeminiExplainer, explanation_conflicts_with_signal
-from app.telegram.formatter import format_technical_report
+from app.telegram.formatter import format_gemini_explanation, format_technical_report
 
 logger = logging.getLogger(__name__)
 VIETNAM_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
@@ -95,10 +96,53 @@ class MarketAnalysisService:
         self.chart_engine = chart_engine or ChartEngine()
 
     async def analyze(self, symbol: str) -> Any:
-        output = await asyncio.to_thread(self.run_sync, symbol)
+        output = await asyncio.to_thread(self.run_sync, symbol, include_gemini=False)
         from app.telegram.handlers import TelegramReport
 
-        return TelegramReport(text=output.text, chart=output.chart)
+        gemini_task = (
+            asyncio.create_task(self._gemini_follow_up(output))
+            if self.gemini is not None
+            else None
+        )
+        return TelegramReport(text=output.text, chart=output.chart, gemini_task=gemini_task)
+
+    async def _gemini_follow_up(self, output: AnalysisOutput) -> str | None:
+        try:
+            explanation = await asyncio.to_thread(self._explain_output_sync, output)
+        except GeminiError:
+            logger.warning("Gemini follow-up unavailable; technical report was sent", exc_info=True)
+            return None
+        return format_gemini_explanation(explanation)
+
+    def _explain_output_sync(self, output: AnalysisOutput) -> Any:
+        if self.gemini is None:
+            return None
+        decision_context = output.rule_result.model_dump(mode="json")
+        decision_context["pp10"] = output.pp10_result.model_dump(mode="json")
+        explanation = self.gemini.explain(
+            quantitative_context=output.indicators.model_dump(mode="json"),
+            event_context=[],
+            decision_context=decision_context,
+        )
+        if output.analysis_run_id is None:
+            return explanation
+
+        session = self.session_factory()
+        try:
+            run = session.get(AnalysisRun, output.analysis_run_id)
+            if run is not None:
+                run.llm_response = explanation.model_dump(mode="json")
+                run.model = self.gemini.model
+                run.explanation_conflict = explanation_conflicts_with_signal(
+                    explanation, output.rule_result.signal
+                )
+                session.commit()
+        except Exception:
+            session.rollback()
+            logger.exception("Could not persist Gemini follow-up")
+        finally:
+            session.close()
+        return explanation
 
     async def chat(self, message: str) -> str:
         if self.gemini is None:

@@ -10,7 +10,7 @@ from app.domain.schemas import IndicatorSnapshot, RuleReason, RuleResult
 from app.telegram.access_control import AccessDenied, RateLimiter, WhitelistAccessController
 from app.telegram.commands import HELP_TEXT, command_menu
 from app.telegram.formatter import chunk_message, format_news_report, format_technical_report
-from app.telegram.handlers import _classify_text
+from app.telegram.handlers import TelegramReport, _classify_text, _send_analysis_report
 
 
 def test_whitelist_and_rate_limit_are_independent() -> None:
@@ -315,3 +315,32 @@ def test_pp10_report_uses_structured_vietnamese_summary_and_action_plan() -> Non
     assert "🔔 KẾT LUẬN" in report
     assert "POSITION PLAN" not in report
     assert "GEMINI ANALYSIS" not in report
+
+
+def test_analysis_sender_delivers_gemini_follow_up_after_technical_report() -> None:
+    messages: list[str] = []
+
+    class Message:
+        async def answer(self, text: str) -> None:
+            messages.append(text)
+
+    async def follow_up() -> str:
+        return "GIẢI THÍCH GEMINI\n• Kết luận: Tiếp tục theo dõi."
+
+    async def scenario() -> None:
+        await _send_analysis_report(
+            Message(),
+            TelegramReport(
+                text="Báo cáo PP10 kỹ thuật",
+                gemini_task=follow_up(),
+            ),
+        )
+
+    import asyncio
+
+    asyncio.run(scenario())
+
+    assert messages == [
+        "Báo cáo PP10 kỹ thuật",
+        "GIẢI THÍCH GEMINI\n• Kết luận: Tiếp tục theo dõi.",
+    ]

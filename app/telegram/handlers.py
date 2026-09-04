@@ -3,8 +3,9 @@ from __future__ import annotations
 import logging
 import re
 import unicodedata
+from collections.abc import Awaitable
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol
 
 from app.telegram.access_control import AccessDenied, RateLimiter, WhitelistAccessController
 from app.telegram.commands import HELP_TEXT
@@ -17,6 +18,7 @@ logger = logging.getLogger(__name__)
 class TelegramReport:
     text: str
     chart: bytes | None = None
+    gemini_task: Awaitable[str | None] | None = None
 
 
 class TelegramAnalysisService(Protocol):
@@ -36,6 +38,19 @@ class TelegramNewsService(Protocol):
 def _user_error_message(error: Exception, fallback: str) -> str:
     message = getattr(error, "user_message", None)
     return message if isinstance(message, str) and message.strip() else fallback
+
+
+async def _send_analysis_report(message: Any, report: TelegramReport) -> None:
+    await send_report_with_chart(message, report.text, chart=report.chart)
+    if report.gemini_task is None:
+        return
+    try:
+        gemini_text = await report.gemini_task
+    except Exception:
+        logger.warning("Gemini follow-up failed after technical report", exc_info=True)
+        return
+    if gemini_text:
+        await send_text_chunks(message.answer, gemini_text)
 
 
 def _fold_text(value: str) -> str:
@@ -144,7 +159,7 @@ def build_router(
         await message.answer("⏳ Đang phân tích dữ liệu...")
         try:
             report = await service.analyze(symbol)
-            await send_report_with_chart(message, report.text, chart=report.chart)
+            await _send_analysis_report(message, report)
         except Exception as exc:
             logger.exception("/analyze failed for symbol=%s", symbol)
             await message.answer(
@@ -218,7 +233,7 @@ def build_router(
             await message.answer("⏳ Đang phân tích dữ liệu...")
             try:
                 report = await service.analyze(symbol)
-                await send_report_with_chart(message, report.text, chart=report.chart)
+                await _send_analysis_report(message, report)
             except Exception as exc:
                 logger.exception("natural analyze failed for symbol=%s", symbol)
                 await message.answer(

@@ -113,8 +113,9 @@ hiển thị theo điểm chỉ số, không phải VND.
 | GEMINI_TIMEOUT_SECONDS | Không | 20 | Timeout HTTP cho Gemini; không đặt dưới 10 giây. |
 
 Gemini không tính lại chỉ báo, không sửa score/signal/risk và không tự biến dữ
-liệu thiếu thành tín hiệu. Nếu Gemini lỗi, technical report vẫn được lưu và
-trả về không có phần giải thích Gemini.
+liệu thiếu thành tín hiệu. Lệnh `/analyze` gửi báo cáo kỹ thuật trước; phần giải
+thích Gemini được xử lý và gửi thành tin nhắn bổ sung. Nếu Gemini lỗi hoặc chậm,
+báo cáo kỹ thuật vẫn được gửi và lưu bình thường.
 
 ### Tin tức RSS
 
