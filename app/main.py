@@ -60,6 +60,7 @@ async def lifespan(_: FastAPI):
                     timeout_seconds=settings.openrouter_timeout_seconds,
                     max_parallel=settings.openrouter_max_parallel,
                     data_collection=settings.openrouter_data_collection,
+                    judge_generator=gemini,
                 )
                 if settings.openrouter_api_key
                 else None

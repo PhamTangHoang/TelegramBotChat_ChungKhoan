@@ -118,6 +118,31 @@ def test_gemini_builds_structured_ai_only_pp10_report() -> None:
     assert "FPT" in prompt
 
 
+def test_gemini_can_judge_openrouter_analyst_drafts() -> None:
+    models = FakeModels(SimpleNamespace(parsed=_ai_report().model_dump()))
+    explainer = GeminiExplainer(
+        api_key="test", model="test-model", client=SimpleNamespace(models=models)
+    )
+
+    result = explainer.generate_pp10_report(
+        symbol="FPT",
+        analysis_date="2026-09-04",
+        quantitative_context={"latest_candle": {"close": "27.200"}},
+        debate_drafts=[
+            {
+                "role": "Chuyên gia kỹ thuật",
+                "model": "technical-model",
+                "content": "Quan điểm kỹ thuật tham khảo.",
+            }
+        ],
+    )
+
+    assert result.total_score == 64
+    prompt = models.calls[0]["contents"]
+    assert "Debate Drafts" in prompt
+    assert "technical-model" in prompt
+
+
 def test_invalid_gemini_response_is_recoverable() -> None:
     models = FakeModels(SimpleNamespace(text='{"conclusion":"only one field"}'))
     explainer = GeminiExplainer(

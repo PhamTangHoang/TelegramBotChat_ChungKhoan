@@ -129,17 +129,21 @@ tham khảo, không phải signal đã xác minh.
 | LLM_PROVIDER | Không | hybrid | `gemini`, `openrouter` hoặc `hybrid`. `hybrid` ưu tiên hội đồng OpenRouter và fallback Gemini. |
 | OPENROUTER_API_KEY | Có nếu dùng OpenRouter | rỗng | API key tạo tại OpenRouter. |
 | OPENROUTER_ANALYST_MODELS | Không | `openrouter/free` x 3 | Ba model analyst; nên khai báo 3 model khác nhau nếu muốn tranh luận đa dạng. |
-| OPENROUTER_JUDGE_MODEL | Không | `openrouter/free` | Model Judge tổng hợp thành một báo cáo PP10Ulti. |
+| OPENROUTER_JUDGE_MODEL | Không | `openrouter/free` | Model Judge dự phòng khi không có Gemini Judge. |
 | OPENROUTER_FALLBACK_MODELS | Không | rỗng | Các model dự phòng cho lượt Judge, cách nhau bằng dấu phẩy. |
 | OPENROUTER_TIMEOUT_SECONDS | Không | 45 | Timeout cho từng request OpenRouter. |
 | OPENROUTER_MAX_PARALLEL | Không | 3 | Số analyst chạy song song, tối đa 3. |
 | OPENROUTER_DATA_COLLECTION | Không | deny | Chính sách dữ liệu gửi tới provider; `deny` ưu tiên riêng tư hơn. |
 
-Khi chạy `/analyze`, ba analyst được gọi song song theo các vai trò kỹ thuật,
-cấu trúc/mẫu hình và rủi ro/phản biện. Model Judge đọc các bản nháp, đối chiếu
-với OHLCV rồi trả đúng schema PP10Ulti 2.0. Các analyst thất bại vẫn được bỏ qua
-nếu còn ít nhất một bản nháp; nếu OpenRouter lỗi hoàn toàn và `LLM_PROVIDER=hybrid`
-thì bot fallback sang Gemini.
+Khi chạy `/analyze` với `LLM_PROVIDER=hybrid` và có cả hai API key, ba analyst
+OpenRouter được gọi song song theo các vai trò kỹ thuật, cấu trúc/mẫu hình và
+rủi ro/phản biện. Gemini nhận các bản nháp đó làm Judge, đối chiếu với OHLCV rồi
+trả đúng schema PP10Ulti 2.0. Như vậy mỗi lượt dùng 3 request OpenRouter và 1
+request Gemini. Các analyst thất bại vẫn được bỏ qua nếu còn ít nhất một bản nháp;
+nếu OpenRouter analyst lỗi hoàn toàn thì bot fallback sang báo cáo Gemini trực tiếp.
+
+Nếu không có `GEMINI_API_KEY`, OpenRouter sẽ tự dùng `OPENROUTER_JUDGE_MODEL` làm
+Judge. Nếu không có `OPENROUTER_API_KEY`, luồng hybrid dùng Gemini trực tiếp.
 
 OpenRouter dùng endpoint tương thích OpenAI và structured JSON cho báo cáo. Với
 `openrouter/free`, model thực tế có thể thay đổi theo availability và giới hạn

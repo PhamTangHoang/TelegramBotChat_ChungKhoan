@@ -143,6 +143,7 @@ class OpenRouterDebateExplainer:
         timeout_seconds: float = 45.0,
         max_parallel: int = 3,
         data_collection: str = "deny",
+        judge_generator: Any | None = None,
         client: OpenRouterClient | None = None,
     ) -> None:
         models = tuple(item.strip() for item in analyst_models if item.strip())
@@ -162,7 +163,13 @@ class OpenRouterDebateExplainer:
             timeout_seconds=timeout_seconds,
             data_collection=data_collection,
         )
-        self.model = self.judge_model
+        self.judge_generator = judge_generator
+        if judge_generator is None:
+            self.model = self.judge_model
+            self.display_name = "OpenRouter: hội đồng AI"
+        else:
+            self.model = getattr(judge_generator, "model", "Gemini Judge")
+            self.display_name = "OpenRouter analyst + Gemini Judge"
 
     def generate_pp10_report(
         self,
@@ -200,14 +207,22 @@ class OpenRouterDebateExplainer:
         if not drafts:
             raise OpenRouterError("No OpenRouter analyst response")
         drafts.sort(key=lambda item: item.role)
+        draft_payload = [
+            {"role": draft.role, "model": draft.model, "content": draft.content}
+            for draft in drafts
+        ]
+        if self.judge_generator is not None:
+            return self.judge_generator.generate_pp10_report(
+                symbol=symbol,
+                analysis_date=analysis_date,
+                quantitative_context=quantitative_context,
+                debate_drafts=draft_payload,
+            )
         judge_prompt = build_openrouter_judge_prompt(
             symbol=symbol,
             analysis_date=analysis_date,
             quantitative_context=quantitative_context,
-            drafts=[
-                {"role": draft.role, "model": draft.model, "content": draft.content}
-                for draft in drafts
-            ],
+            drafts=draft_payload,
         )
         completion = self.client.complete(
             model=self.judge_model,

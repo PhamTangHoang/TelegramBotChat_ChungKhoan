@@ -128,6 +128,41 @@ def test_debate_runs_analysts_and_judge_then_validates_pp10_report() -> None:
     assert judge_call["json"]["response_format"]["type"] == "json_schema"
 
 
+def test_debate_can_send_analyst_drafts_to_gemini_judge() -> None:
+    class GeminiJudge:
+        model = "gemini-judge"
+
+        def __init__(self) -> None:
+            self.kwargs: dict[str, Any] | None = None
+
+        def generate_pp10_report(self, **kwargs: Any) -> PP10AIReport:
+            self.kwargs = kwargs
+            return PP10AIReport.model_validate(_report_payload())
+
+    requester = FakeRequester(lambda model, _body: f"Ý kiến từ {model}.")
+    judge = GeminiJudge()
+    explainer = OpenRouterDebateExplainer(
+        api_key="test-key",
+        analyst_models=("technical-model", "pattern-model", "risk-model"),
+        judge_model="unused-openrouter-judge",
+        judge_generator=judge,
+        client=OpenRouterClient(api_key="test-key", requester=requester),
+    )
+
+    result = explainer.generate_pp10_report(
+        symbol="FPT",
+        analysis_date="2026-09-04",
+        quantitative_context={"latest_candle": {"close": 100}},
+    )
+
+    assert isinstance(result, PP10AIReport)
+    assert len(requester.calls) == 3
+    assert judge.kwargs is not None
+    assert judge.kwargs["debate_drafts"]
+    assert len(judge.kwargs["debate_drafts"]) == 3
+    assert judge.kwargs["quantitative_context"]["latest_candle"]["close"] == 100
+
+
 def test_debate_keeps_working_when_one_analyst_fails() -> None:
     payload = json.dumps(_report_payload(), ensure_ascii=False)
 

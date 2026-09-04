@@ -118,11 +118,13 @@ class GeminiExplainer:
         symbol: str,
         analysis_date: str,
         quantitative_context: Any | None = None,
+        debate_drafts: list[dict[str, str]] | None = None,
     ) -> PP10AIReport:
         prompt = build_pp10_prompt(
             symbol=symbol,
             analysis_date=analysis_date,
             quantitative_context=quantitative_context,
+            debate_drafts=debate_drafts,
         )
         try:
             from google.genai import types
