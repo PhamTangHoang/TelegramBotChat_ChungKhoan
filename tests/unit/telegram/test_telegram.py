@@ -363,7 +363,7 @@ def test_ai_pp10_report_uses_sample_headings_without_market_data_or_chart() -> N
     assert "NHÓM KỸ THUẬT" in report
     assert "🤖 AI SUY LUẬN" in report
     assert "3. KẾ HOẠCH HÀNH ĐỘNG THAM KHẢO" in report
-    assert "không cào dữ liệu live" in report
+    assert "không có OHLCV live" in report
     assert "[ Photo ]" not in report
 
 

@@ -112,8 +112,18 @@ class GeminiExplainer:
             logger.warning("Gemini returned invalid structured explanation", exc_info=True)
             raise GeminiError("Gemini response failed schema validation") from exc
 
-    def generate_pp10_report(self, *, symbol: str, analysis_date: str) -> PP10AIReport:
-        prompt = build_pp10_prompt(symbol=symbol, analysis_date=analysis_date)
+    def generate_pp10_report(
+        self,
+        *,
+        symbol: str,
+        analysis_date: str,
+        quantitative_context: Any | None = None,
+    ) -> PP10AIReport:
+        prompt = build_pp10_prompt(
+            symbol=symbol,
+            analysis_date=analysis_date,
+            quantitative_context=quantitative_context,
+        )
         try:
             from google.genai import types
 

@@ -115,11 +115,23 @@ class MarketAnalysisService:
         analysis_time = datetime.now(VIETNAM_TZ)
         analysis_date = analysis_time.strftime("%Y-%m-%d %H:%M:%S%z")
         try:
+            quantitative_context, latest_candle = await asyncio.to_thread(
+                self._fetch_ai_ohlcv,
+                normalized_symbol,
+                analysis_time,
+            )
             report = await asyncio.to_thread(
                 self.gemini.generate_pp10_report,
                 symbol=normalized_symbol,
                 analysis_date=analysis_date,
+                quantitative_context=quantitative_context,
             )
+        except NoMarketDataError as exc:
+            logger.warning("AI-only OHLCV data unavailable for symbol=%s", normalized_symbol)
+            raise AnalysisUnavailable(
+                "OHLCV data is unavailable for AI analysis",
+                user_message=f"Mã {normalized_symbol} hiện không có dữ liệu OHLCV.",
+            ) from exc
         except GeminiError as exc:
             logger.warning("AI-only PP10 analysis failed for symbol=%s", normalized_symbol)
             raise AnalysisUnavailable(
@@ -129,15 +141,81 @@ class MarketAnalysisService:
                     "/chart SYMBOL để xem biểu đồ."
                 ),
             ) from exc
+        except Exception as exc:
+            logger.exception("AI-only analysis pipeline failed for symbol=%s", normalized_symbol)
+            raise AnalysisUnavailable(
+                "AI-only analysis pipeline is unavailable",
+                user_message="Không thể lấy dữ liệu OHLCV hoặc tạo báo cáo AI lúc này.",
+            ) from exc
 
         return TelegramReport(
             text=format_ai_pp10_report(
                 symbol=normalized_symbol,
                 as_of=analysis_time,
                 report=report,
+                latest_price=latest_candle.close,
+                data_source=getattr(self.provider, "source", "market provider"),
             ),
             chart=None,
         )
+
+    def _fetch_ai_ohlcv(
+        self, symbol: str, as_of: datetime
+    ) -> tuple[dict[str, Any], MarketCandle]:
+        try:
+            symbol_index = self.settings.watchlist_symbols.index(symbol)
+            exchange = self.settings.watchlist_exchanges[symbol_index]
+        except (AttributeError, IndexError, ValueError):
+            exchange = "HOSE"
+
+        rows = list(
+            self.provider.get_ohlcv(
+                symbol,
+                as_of.date() - timedelta(days=400),
+                as_of.date(),
+                exchange=exchange,
+                is_final=False,
+            )
+        )
+        rows = sorted(
+            (row for row in rows if row.trading_date <= as_of.date()),
+            key=lambda row: row.trading_date,
+        )
+        if not rows:
+            raise NoMarketDataError(f"No market data for {symbol}")
+
+        latest_candle = rows[-1]
+        context = {
+            "symbol": symbol,
+            "exchange": exchange,
+            "as_of": as_of,
+            "data_source": getattr(self.provider, "source", type(self.provider).__name__),
+            "price_unit": (
+                "provider trả giá theo nghìn VND; khi hiển thị, quy đổi thành VND/cổ phiếu"
+            ),
+            "latest_candle": self._ai_candle_payload(latest_candle),
+            "ohlcv_daily": [self._ai_candle_payload(row) for row in rows[-220:]],
+            "not_provided": [
+                "VN-Index",
+                "RS Rating toàn universe",
+                "fundamentals và valuation",
+                "khối ngoại/tự doanh",
+                "news",
+            ],
+        }
+        return canonicalize(context), latest_candle
+
+    @staticmethod
+    def _ai_candle_payload(candle: MarketCandle) -> dict[str, Any]:
+        return {
+            "trading_date": candle.trading_date,
+            "open": candle.open,
+            "high": candle.high,
+            "low": candle.low,
+            "close": candle.close,
+            "volume": candle.volume,
+            "is_final": candle.is_final,
+        }
 
     async def _gemini_follow_up(self, output: AnalysisOutput) -> str | None:
         try:

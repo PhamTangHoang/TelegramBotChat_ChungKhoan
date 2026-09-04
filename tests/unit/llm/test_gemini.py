@@ -100,13 +100,21 @@ def test_gemini_builds_structured_ai_only_pp10_report() -> None:
         api_key="test", model="test-model", client=SimpleNamespace(models=models)
     )
 
-    result = explainer.generate_pp10_report(symbol="FPT", analysis_date="2026-09-04")
+    result = explainer.generate_pp10_report(
+        symbol="FPT",
+        analysis_date="2026-09-04",
+        quantitative_context={
+            "latest_candle": {"close": "27.200", "volume": 1000000},
+            "ohlcv_daily": [{"trading_date": "2026-09-04", "close": "27.200"}],
+        },
+    )
 
     assert result.total_score == 64
     config = models.calls[0]["config"]
     assert config.response_schema["title"] == "PP10AIReport"
     prompt = models.calls[0]["contents"]
-    assert "NO live market data" in prompt
+    assert "OHLCV" in prompt
+    assert "ohlcv_daily" in prompt
     assert "FPT" in prompt
 
 

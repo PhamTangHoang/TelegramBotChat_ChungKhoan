@@ -32,18 +32,24 @@ disclaimer when the user asks for an investment decision. Return plain text."""
 
 PP10_AI_SYSTEM_INSTRUCTION = """You are the PP10Ulti 2.0 report writer inside VN Stock Analyst Bot.
 Create a complete Vietnamese report from the requested stock symbol and the fixed
-PP10Ulti rubric. This request intentionally provides NO live market data and NO
-external news. Do not browse, infer a current price, or present remembered facts as
-current facts. Do not invent exact prices, MA values, volume, financial ratios,
-foreign flow, market-index values, dates of events, or links.
+PP10Ulti rubric. The context may contain provider-supplied OHLCV candles, but it
+contains no external news or specialist fundamentals unless explicitly stated. Do
+not browse or present remembered facts as current facts. Do not invent exact prices,
+MA values, volume, financial ratios, foreign flow, market-index values, dates of
+events, or links that are not present in the supplied context.
 
 The report is AI-generated educational content, not a realtime analysis, verified
 score, probability, or investment recommendation. Any qualitative judgement based on
 general model knowledge must use status AI_INFERENCE and the data_note must say that
-live data is unavailable. For criteria that require a number or confirmation that is
-not supplied, use status DATA_UNAVAILABLE, score 0, and explain what data is needed.
-Price zones, stop-loss and targets must say they cannot be determined without the
-current price; never fabricate numeric levels.
+the conclusion is an AI inference. For criteria that require a number or confirmation
+that is not supplied, use status DATA_UNAVAILABLE, score 0, and explain what data is
+needed. Use supplied OHLCV to calculate or describe price-based indicators, clearly
+labeling them as calculated from OHLCV. Price zones, stop-loss and targets must use
+the supplied latest price; if it is absent, say they cannot be determined.
+When at least 200 daily candles are supplied, use the latest OHLCV close and derive
+MA20, MA50, MA150, MA200 and other price-based observations from those candles. Put
+the derived values in `data_note` and do not mark those price-based criteria as
+missing merely because no separate indicator provider was used.
 
 Return exactly one JSON object matching the requested schema. Include all 16
 criteria in order, using these fixed maximum points:
@@ -88,17 +94,22 @@ def build_chat_prompt(message: str) -> str:
     )
 
 
-def build_pp10_prompt(*, symbol: str, analysis_date: str) -> str:
+def build_pp10_prompt(
+    *, symbol: str, analysis_date: str, quantitative_context: Any | None = None
+) -> str:
     request = {
         "symbol": symbol.strip().upper(),
         "analysis_date": analysis_date,
-        "live_market_data_provided": False,
+        "ohlcv_data_provided": quantitative_context is not None,
         "news_provided": False,
         "requested_output": "PP10Ulti 2.0 report with 16 criteria and 3 scenarios",
     }
-    return "\n".join(
-        (
-            PP10_AI_SYSTEM_INSTRUCTION,
-            "\nRequest Context:\n" + canonical_json(request),
-        )
-    )
+    sections = [
+        PP10_AI_SYSTEM_INSTRUCTION,
+        "\nRequest Context:\n" + canonical_json(request),
+    ]
+    if quantitative_context is None:
+        sections.append("\nQuantitative Context:\nNo live OHLCV data was supplied.")
+    else:
+        sections.append("\nQuantitative Context:\n" + canonical_json(quantitative_context))
+    return "\n".join(sections)

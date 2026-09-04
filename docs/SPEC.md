@@ -4,7 +4,7 @@
 
 Build a configurable Telegram bot with two separate analysis surfaces. The
 `/analyze SYMBOL` command calls Gemini directly with a versioned PP10Ulti prompt and
-returns an AI-generated report without collecting live market data. Data-backed
+returns an AI-generated report after collecting only basic OHLCV data. Data-backed
 features such as `/chart`, `/market`, the scheduler and `/news` keep their existing
 provider pipelines.
 

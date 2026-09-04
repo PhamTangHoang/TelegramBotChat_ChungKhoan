@@ -194,13 +194,43 @@ def _ai_confidence_label(confidence: str) -> str:
     )
 
 
-def format_ai_pp10_report(*, symbol: str, as_of: datetime, report: Any) -> str:
+def format_ai_pp10_report(
+    *,
+    symbol: str,
+    as_of: datetime,
+    report: Any,
+    latest_price: Any | None = None,
+    data_source: str | None = None,
+) -> str:
     criteria_by_id = {criterion.criterion_id: criterion for criterion in report.criteria}
-    lines = [
-        f"BÁO CÁO PP10ULTI 2.0 – {symbol.upper()}",
-        f"Ngày tạo: {as_of.strftime('%d/%m/%Y %H:%M')}",
-        "Chế độ: AI tạo trực tiếp từ prompt — không cào dữ liệu live",
-        "Trạng thái: Không phải phân tích realtime; các nhận định cần tự kiểm chứng",
+    if latest_price is None:
+        mode_line = "Chế độ: AI tạo trực tiếp từ prompt — không có OHLCV live"
+        data_line = "Trạng thái: Không phải phân tích realtime; các nhận định cần tự kiểm chứng"
+        source_line = None
+        footer_line = (
+            "Báo cáo do AI tạo từ prompt, không sử dụng dữ liệu thị trường live và "
+            "không phải khuyến nghị mua/bán."
+        )
+    else:
+        mode_line = "Chế độ: AI phân tích từ OHLCV — không cào dữ liệu chuyên biệt"
+        data_line = (
+            "Trạng thái: Có dữ liệu giá OHLCV; các mục ngoài OHLCV cần nguồn riêng "
+            "và tự kiểm chứng"
+        )
+        source_line = f"Nguồn OHLCV: {data_source or 'market provider'}"
+        footer_line = (
+            "Báo cáo do AI tạo từ OHLCV được cung cấp; điểm số và nhận định không "
+            "phải tín hiệu đã xác minh hay khuyến nghị mua/bán."
+        )
+    lines = [f"BÁO CÁO PP10ULTI 2.0 – {symbol.upper()}"]
+    if latest_price is not None:
+        lines.append(f"Giá tham chiếu: {_price_per_share(latest_price)}")
+    lines.extend(
+        [
+            f"Ngày tạo: {as_of.strftime('%d/%m/%Y %H:%M')}",
+            mode_line,
+            data_line,
+            *([source_line] if source_line else []),
         "",
         "1. TỔNG ĐIỂM PP10ULTI 2.0",
         f"Tổng điểm AI tham khảo: {report.total_score}/100",
@@ -214,7 +244,8 @@ def format_ai_pp10_report(*, symbol: str, as_of: datetime, report: Any) -> str:
         "",
         "2. CHI TIẾT CÁC HẠNG MỤC",
         "Hạng mục | Điểm | Nhận xét chi tiết",
-    ]
+        ]
+    )
 
     for group_name, criterion_ids in _PP10_GROUPS:
         lines.extend(["", group_name])
@@ -247,8 +278,7 @@ def format_ai_pp10_report(*, symbol: str, as_of: datetime, report: Any) -> str:
             f"Kỳ vọng: {report.expectation}",
             f"Lưu ý: {report.key_note}",
             "",
-            "Báo cáo do AI tạo từ prompt, không sử dụng dữ liệu thị trường live và "
-            "không phải khuyến nghị mua/bán.",
+            footer_line,
             DISCLAIMER,
         ]
     )

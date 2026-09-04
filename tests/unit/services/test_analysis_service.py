@@ -1,5 +1,8 @@
+from datetime import date
+from decimal import Decimal
 from types import SimpleNamespace
 
+from app.domain.schemas import MarketCandle
 from app.llm.schemas import PP10AIAction, PP10AICriterion, PP10AIReport
 from app.services.analysis_service import MarketAnalysisService
 
@@ -7,7 +10,11 @@ from app.services.analysis_service import MarketAnalysisService
 class DirectGemini:
     model = "test-model"
 
+    def __init__(self) -> None:
+        self.context: dict[str, object] | None = None
+
     def generate_pp10_report(self, **kwargs: object) -> PP10AIReport:
+        self.context = kwargs["quantitative_context"]  # type: ignore[assignment]
         maximums = (10, 8, 8, 8, 8, 8, 7, 5, 6, 8, 4, 5, 5, 4, 4, 2)
         return PP10AIReport(
             total_score=64,
@@ -50,15 +57,28 @@ class DirectGemini:
         )
 
 
-def test_analyze_uses_gemini_directly_without_market_provider() -> None:
+def test_analyze_sends_only_basic_ohlcv_to_gemini() -> None:
     gemini = DirectGemini()
 
-    class FailingProvider:
-        def get_ohlcv(self, *args: object, **kwargs: object) -> None:
-            raise AssertionError("AI-only analyze must not call the market provider")
+    class OhlcvProvider:
+        def get_ohlcv(self, *args: object, **kwargs: object) -> list[MarketCandle]:
+            return [
+                MarketCandle(
+                    symbol="FPT",
+                    exchange="HOSE",
+                    trading_date=date(2026, 9, 4),
+                    open=Decimal("27.0"),
+                    high=Decimal("27.5"),
+                    low=Decimal("26.8"),
+                    close=Decimal("27.2"),
+                    volume=1000000,
+                    source="test",
+                    is_final=False,
+                )
+            ]
 
     service = MarketAnalysisService(
-        provider=FailingProvider(),
+        provider=OhlcvProvider(),
         session_factory=lambda: (_ for _ in ()).throw(
             AssertionError("AI-only analyze must not open a database session")
         ),
@@ -78,5 +98,10 @@ def test_analyze_uses_gemini_directly_without_market_provider() -> None:
 
     assert report.chart is None
     assert "BÁO CÁO PP10ULTI 2.0 – FPT" in report.text
+    assert "Giá tham chiếu: 27.200 VND/cổ phiếu" in report.text
+    assert "OHLCV" in report.text
     assert "AI" in report.text
     assert report.gemini_task is None
+    assert gemini.context is not None
+    assert gemini.context["latest_candle"]["close"] == "27.2"
+    assert len(gemini.context["ohlcv_daily"]) == 1
