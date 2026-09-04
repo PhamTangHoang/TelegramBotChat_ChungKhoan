@@ -73,9 +73,14 @@ class NewsService:
         since = now - timedelta(hours=lookback_hours)
         session = self.session_factory()
         try:
-            items = list(recent_news(session, since=since, symbol=symbol, limit=max_items))
+            # Symbol matching is a Python word-boundary check over title/summary.
+            # Load all recent candidates first so a target article is not lost
+            # because unrelated headlines filled the SQL LIMIT.
+            query_limit = None if symbol is not None else max_items
+            items = list(recent_news(session, since=since, symbol=symbol, limit=query_limit))
             if symbol is not None:
                 items = [item for item in items if _mentions_symbol(item, symbol)]
+            items = items[:max_items]
             status = "AVAILABLE" if items else "EMPTY"
             return NewsQueryResult(
                 items=tuple(_to_record(item) for item in items),

@@ -39,8 +39,8 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://postgres:postgres@postgres:5432/vn_stock"
     vnstock_source: str = "kbs"
     gemini_api_key: str | None = None
-    gemini_model: str = "gemini-2.5-flash"
-    gemini_timeout_seconds: float = Field(default=10.0, gt=0, le=120)
+    gemini_model: str = "gemini-3.1-flash-lite"
+    gemini_timeout_seconds: float = Field(default=20.0, gt=0, le=120)
     telegram_bot_token: str | None = None
     telegram_public_access: bool = False
     telegram_allowed_chat_ids: CsvInts = Field(default_factory=tuple)

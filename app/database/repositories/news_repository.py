@@ -39,7 +39,7 @@ def recent_news(
     *,
     since: datetime,
     symbol: str | None = None,
-    limit: int = 20,
+    limit: int | None = 20,
 ) -> list[News]:
     query = (
         select(News)
@@ -54,8 +54,9 @@ def recent_news(
             News.published_at.desc(),
             News.fetched_at.desc(),
         )
-        .limit(limit)
     )
+    if limit is not None:
+        query = query.limit(limit)
     if symbol is not None:
         symbol = symbol.strip().upper()
         query = query.where((News.symbol == symbol) | (News.symbol.is_(None)))

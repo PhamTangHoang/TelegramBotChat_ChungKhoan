@@ -41,7 +41,7 @@ class GeminiExplainer:
         api_key: str,
         model: str,
         client: Any | None = None,
-        timeout_seconds: float = 8.0,
+        timeout_seconds: float = 20.0,
     ) -> None:
         if not client and not api_key.strip():
             raise ValueError("Gemini API key is required for the live explainer")

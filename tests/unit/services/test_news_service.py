@@ -41,6 +41,35 @@ class MixedNewsProvider(FakeNewsProvider):
         ]
 
 
+class TargetOutsideInitialLimitProvider:
+    def fetch(self, feed_urls: tuple[str, ...]) -> list[NewsItem]:
+        published_at = datetime(2026, 9, 3, 5, tzinfo=UTC)
+        unrelated = [
+            NewsItem(
+                source="Example Source",
+                title=f"Market headline {index}",
+                summary="Unrelated market summary",
+                url=f"https://example.test/market-{index}",
+                published_at=published_at,
+                content_hash=str(index).zfill(64),
+                fetched_at=published_at,
+            )
+            for index in range(10)
+        ]
+        return [
+            NewsItem(
+                source="Example Source",
+                title="ACB announces quarterly results",
+                summary="ACB reported its latest results.",
+                url="https://example.test/acb-results",
+                published_at=datetime(2026, 9, 3, 4, tzinfo=UTC),
+                content_hash="c" * 64,
+                fetched_at=published_at,
+            ),
+            *unrelated,
+        ]
+
+
 def _service(provider: object | None = None) -> tuple[NewsService, sessionmaker]:
     engine = create_engine(
         "sqlite://",
@@ -110,3 +139,13 @@ def test_symbol_news_filters_unrelated_global_articles() -> None:
 
     assert "FPT test headline" in report
     assert "Unrelated steel market headline" not in report
+
+
+def test_symbol_news_filters_after_loading_all_recent_articles() -> None:
+    service, _ = _service(TargetOutsideInitialLimitProvider())
+    now = datetime(2026, 9, 3, 5, tzinfo=UTC)
+
+    report = service.report_sync("ACB", now=now)
+
+    assert "ACB announces quarterly results" in report
+    assert "Market headline 0" not in report
