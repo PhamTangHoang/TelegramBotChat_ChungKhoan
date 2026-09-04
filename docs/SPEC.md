@@ -2,18 +2,23 @@
 
 ## Objective
 
-Build a configurable Telegram bot that collects Vietnamese market data,
-validates and stores it, computes deterministic technical indicators, produces a
-versioned signal/risk result, audits the exact inputs, optionally asks Gemini for
-explanation, and delivers a technical report and chart.
+Build a configurable Telegram bot with two separate analysis surfaces. The
+`/analyze SYMBOL` command calls Gemini directly with a versioned PP10Ulti prompt and
+returns an AI-generated report without collecting live market data. Data-backed
+features such as `/chart`, `/market`, the scheduler and `/news` keep their existing
+provider pipelines.
 
 Telegram access is private whitelist mode by default and can be explicitly
 switched to public mode with `TELEGRAM_PUBLIC_ACCESS=true`.
 
 ## Non-negotiable boundaries
 
-- Rule Engine is the only owner of `signal`, `score` and `confidence_raw`.
-- Gemini cannot calculate, override or reinterpret the primary signal.
+- `/analyze` labels score, signal, risk and confidence as AI-generated references;
+  they are not validated market signals or probabilities.
+- The deterministic Rule Engine remains authoritative only for the data-backed
+  pipeline used by scheduler and chart-related analysis.
+- The PP10 AI prompt must not invent current prices, indicators, fundamentals,
+  market-index values, news or links when they are not supplied.
 - Provider responses, RSS content and LLM output are untrusted input.
 - Raw OHLCV is the only live MVP price basis.
 - Secrets live only in the user's untracked `.env`.
@@ -43,7 +48,8 @@ docker compose exec app python -m pytest -q
 - Calendar boundaries and OHLCV invariants are covered by deterministic tests.
 - Same quantitative input and rule version always produce the same result.
 - Missing mandatory data returns `INSUFFICIENT_DATA` without a fake signal.
-- Gemini/Telegram/provider failures never destroy the saved technical result.
+- Gemini/Telegram failures return a user-readable error and do not affect the
+  separate data-backed pipeline.
 - Final candles cannot be overwritten by hourly ingestion.
 - The user can later add `.env` and run live provider/Gemini/Telegram tests.
 

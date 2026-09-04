@@ -1,12 +1,12 @@
 # VN Stock Analyst Bot
 
-Bot Telegram phân tích kỹ thuật cổ phiếu Việt Nam. Bot lấy dữ liệu OHLCV, tính
-chỉ báo tất định, chấm điểm Rule Engine và PP10Ulti, lưu đầu vào để audit, sau
-đó có thể dùng Gemini để giải thích kết quả.
+Bot Telegram hỗ trợ báo cáo PP10Ulti 2.0 bằng Gemini theo prompt mẫu. Lệnh
+`/analyze SYMBOL` tạo báo cáo trực tiếp từ AI, không cào dữ liệu thị trường live;
+`/chart`, `/market` và `/news` là các tính năng dữ liệu riêng.
 
-Rule Engine là nguồn duy nhất quyết định signal, score và risk. Gemini chỉ là
-lớp giải thích, không được thay đổi tín hiệu. Tin tức là module riêng và không
-được cộng vào điểm PP10Ulti.
+Luồng `/analyze` là AI-generated và không phải phân tích realtime. Điểm, xếp hạng,
+vùng giá và kịch bản trong báo cáo chỉ là nhận định tham khảo của Gemini; không
+được xem là số liệu đã xác minh hay khuyến nghị đầu tư. Tin tức là module riêng.
 
 > Đây là công cụ tham khảo/kỹ thuật, không phải dịch vụ tư vấn đầu tư. Điểm số
 > không phải xác suất dự đoán.
@@ -17,8 +17,8 @@ lớp giải thích, không được thay đổi tín hiệu. Tin tức là modu
 
 - Docker Desktop hoặc Docker Engine có Docker Compose.
 - Telegram bot token nếu muốn chạy bot Telegram.
-- Gemini API key là tùy chọn; bot vẫn phân tích kỹ thuật khi không có key.
-- Kết nối Internet để lấy dữ liệu thị trường, RSS và Gemini.
+- Gemini API key là bắt buộc cho `/analyze` và chat tự nhiên.
+- Kết nối Internet để dùng Gemini, `/chart`, `/market` và RSS.
 
 ### Cài đặt
 
@@ -108,14 +108,14 @@ hiển thị theo điểm chỉ số, không phải VND.
 
 | Biến | Bắt buộc | Mặc định | Ý nghĩa |
 | --- | --- | --- | --- |
-| GEMINI_API_KEY | Không | rỗng | Key của Gemini. Không có key thì bỏ qua phần giải thích Gemini. |
-| GEMINI_MODEL | Không | gemini-3.1-flash-lite | Model dùng để giải thích structured JSON. |
+| GEMINI_API_KEY | Có cho /analyze | rỗng | Key của Gemini để tạo báo cáo AI và chat tự nhiên. |
+| GEMINI_MODEL | Không | gemini-3.1-flash-lite | Model dùng để tạo báo cáo PP10 structured JSON. |
 | GEMINI_TIMEOUT_SECONDS | Không | 20 | Timeout HTTP cho Gemini; không đặt dưới 10 giây. |
 
-Gemini không tính lại chỉ báo, không sửa score/signal/risk và không tự biến dữ
-liệu thiếu thành tín hiệu. Lệnh `/analyze` gửi báo cáo kỹ thuật trước; phần giải
-thích Gemini được xử lý và gửi thành tin nhắn bổ sung. Nếu Gemini lỗi hoặc chậm,
-báo cáo kỹ thuật vẫn được gửi và lưu bình thường.
+Lệnh `/analyze` gọi Gemini trực tiếp và không gọi provider market, fundamentals,
+VN-Index, RSS hoặc chart. Prompt yêu cầu Gemini không bịa giá hiện tại, chỉ báo,
+tin tức, link hay vùng giá; phần thiếu dữ liệu phải ghi rõ. Vì không có dữ liệu
+live được truyền vào, toàn bộ kết quả là nội dung AI tạo để tham khảo.
 
 ### Tin tức RSS
 
@@ -144,7 +144,7 @@ RSS là dữ liệu tổng hợp, bot không xác minh độc lập nội dung b
 | RS_LOOKBACK_DAYS | 20 | Khoảng nhìn lại cho relative performance. |
 | RULE_VERSION | 1.5.0 | Phiên bản Rule Engine. |
 | PP10_VERSION | 2.0.0 | Phiên bản bộ chấm và format báo cáo PP10Ulti. |
-| PROMPT_VERSION | 1.2.0 | Phiên bản prompt Gemini. |
+| PROMPT_VERSION | 2.0.0 | Phiên bản prompt báo cáo PP10 AI. |
 | DATA_SCHEMA_VERSION | 1.0.0 | Phiên bản snapshot/audit. |
 | LOG_LEVEL | INFO | Mức log: DEBUG, INFO, WARNING, ERROR hoặc CRITICAL. |
 
@@ -160,7 +160,7 @@ Các lệnh public:
 | --- | --- |
 | /start | Khởi động và xem hướng dẫn nhanh. |
 | /help | Xem toàn bộ lệnh. |
-| /analyze FPT | Technical Analysis + Rule Engine + PP10Ulti + Gemini nếu có. |
+| /analyze FPT | Gemini tạo báo cáo PP10Ulti theo prompt mẫu, không cào dữ liệu live. |
 | /chart FPT | Tạo và gửi biểu đồ kỹ thuật. |
 | /news FPT | Xem tin liên quan đến FPT, kèm link bài gốc. |
 | /news | Xem tin thị trường chung. |
@@ -185,37 +185,34 @@ thuật vẫn hoạt động.
 
 ## Nội dung báo cáo /analyze
 
-Một báo cáo PP10Ulti 2.0 gồm các phần chính:
+Một báo cáo PP10Ulti 2.0 do AI tạo gồm các phần chính:
 
-1. Giá tham chiếu, ngày cập nhật, trạng thái phiên và độ mới dữ liệu.
-2. Tổng điểm, độ phủ dữ liệu, xếp hạng, mức độ tin cậy và kết luận sơ bộ.
+1. Mã cổ phiếu, thời điểm tạo và trạng thái rõ ràng là không realtime.
+2. Điểm AI tham khảo, xếp hạng, mức độ tin cậy và kết luận sơ bộ.
 3. Chi tiết từng tiêu chí theo nhóm kỹ thuật, dòng tiền, động lượng, cơ bản,
    định giá/vĩ mô và quản trị vị thế.
 4. Kế hoạch hành động tham khảo với ba kịch bản, vùng giá, stop-loss, mục tiêu
    và R:R.
-5. Kết luận kỹ thuật; phần giải thích Gemini chỉ xuất hiện khi Gemini trả về
-   hợp lệ.
+5. Kết luận và lưu ý rằng Gemini không nhận dữ liệu live.
 
 ### PP10Ulti
 
-PP10 chấm các nhóm tiêu chí xu hướng MA, Wyckoff heuristic, mẫu hình, pattern
-quality, volume, VPVR xấp xỉ, CPR, OBV/CMF, MACD, RSI/ADX, Stochastic RSI,
-fundamental, valuation, thị trường chung và quản trị vị thế.
+Prompt PP10 yêu cầu Gemini nhận xét các nhóm xu hướng MA, Wyckoff, mẫu hình,
+volume, VPVR, CPR, OBV/CMF, MACD, RSI/ADX, Stochastic RSI, cơ bản, định giá,
+thị trường chung và quản trị vị thế.
 
-Tiêu chí chỉ được cộng vào mẫu số khi dữ liệu đã đủ. Những phần chưa có nguồn
-đáng tin cậy sẽ hiện “chưa có dữ liệu”, không bị đoán giả và không làm sai điểm.
-Đặc biệt, RS Rating toàn universe và so sánh P/E/P/B ngành/lịch sử cần provider
-chuyên biệt; hiện có thể chưa đánh giá được.
+Do `/analyze` không truyền dữ liệu live, prompt yêu cầu các tiêu chí thiếu dữ liệu
+hiển thị “chưa có dữ liệu” hoặc “AI suy luận”. Điểm số không phải điểm định lượng
+đã xác minh.
 
 ### News không nằm trong điểm
 
 News được gọi riêng bằng /news, không được đưa vào score PP10Ulti. Điều này giúp
 phân biệt rõ:
 
-- Phân tích định lượng: OHLCV, chỉ báo, Rule Engine và PP10Ulti.
+- Báo cáo AI: nội dung do Gemini tạo theo prompt PP10Ulti, không có dữ liệu live.
 - Thông tin sự kiện: tiêu đề/tóm tắt RSS và link bài gốc.
-- Gemini: giải thích các dữ liệu đã có, không dùng tin chưa được truyền vào
-  report để tự suy diễn.
+- Gemini không được dùng tin tức vì news vẫn là module `/news` riêng.
 
 ## Chạy test và phát triển
 
@@ -328,8 +325,8 @@ demo ngắn hạn hoặc khi đổi kiến trúc sang webhook/database bên ngo�
 | News có tiêu đề nhưng không có bài liên quan | Đang gọi /news nên bot trả tin thị trường chung. | Gọi /news SYMBOL, ví dụ /news FPT. |
 | /market báo không ở regular trading session | Gọi ngoài giờ HOSE. | Giờ regular mặc định: 09:00–11:30 và 13:00–14:45; ngày nghỉ vẫn không có phiên. |
 | Một số PP10 hiện DATA_UNAVAILABLE | Provider chưa cung cấp dữ liệu chuyên biệt hoặc chưa đủ lịch sử. | Đây là trạng thái an toàn; không tự thay bằng giá trị ước đoán. |
-| /analyze chạy lâu | vnstock, chart hoặc Gemini là các boundary bên ngoài. | Xem log thời lượng; Gemini có timeout riêng, technical result vẫn được bảo toàn khi Gemini lỗi. |
-| Mã cổ phiếu không có dữ liệu | Provider không trả OHLCV hợp lệ hoặc mã/sàn chưa được hỗ trợ. | Thử FPT, ACB, REE hoặc VCB; xem log provider. |
+| /analyze chạy lâu | Gemini đang xử lý structured JSON hoặc instance đang khởi động. | Đặt `GEMINI_TIMEOUT_SECONDS` phù hợp, xem log `Gemini PP10 report`; lệnh này không gọi vnstock. |
+| /analyze báo cần GEMINI_API_KEY | Luồng báo cáo hiện là pure AI. | Bổ sung `GEMINI_API_KEY`; dùng `/chart`, `/market` hoặc `/news` cho tính năng dữ liệu riêng. |
 
 ## Cấu trúc project
 
