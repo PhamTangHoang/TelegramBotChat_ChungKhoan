@@ -143,7 +143,7 @@ RSS là dữ liệu tổng hợp, bot không xác minh độc lập nội dung b
 | RS_LOOKBACK_DAYS | 20 | Khoảng nhìn lại cho relative performance. |
 | RULE_VERSION | 1.5.0 | Phiên bản Rule Engine. |
 | PP10_VERSION | 1.1.0 | Phiên bản bộ chấm PP10Ulti. |
-| PROMPT_VERSION | 1.1.0 | Phiên bản prompt Gemini. |
+| PROMPT_VERSION | 1.2.0 | Phiên bản prompt Gemini. |
 | DATA_SCHEMA_VERSION | 1.0.0 | Phiên bản snapshot/audit. |
 | LOG_LEVEL | INFO | Mức log: DEBUG, INFO, WARNING, ERROR hoặc CRITICAL. |
 

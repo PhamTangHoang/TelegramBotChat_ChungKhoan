@@ -4,7 +4,7 @@ from typing import Any
 
 from app.audit.snapshot import canonical_json
 
-PROMPT_VERSION = "1.1.0"
+PROMPT_VERSION = "1.2.0"
 
 SYSTEM_INSTRUCTION = """You explain a precomputed Vietnamese stock technical analysis.
 The Rule Engine is authoritative. Do not recalculate indicators, change the signal,
@@ -14,10 +14,14 @@ or use unavailable news as evidence. Explicitly distinguish news published_at fr
 The conclusion must agree with the primary signal supplied in Decision Context.
 This is a private analytical tool, not investment advice, and score is not a
 probability estimate or validated confidence percentage.
+Write every user-facing field in Vietnamese. Do not output English prose, even when
+the input data, indicator names or ticker symbols are in English. Keep standard
+technical abbreviations and ticker symbols unchanged.
 Return only the requested structured JSON object."""
 
 CHAT_SYSTEM_INSTRUCTION = """You are the conversational assistant inside VN Stock Analyst Bot.
-Answer in concise Vietnamese unless the user asks for another language. You can
+Always answer in Vietnamese, using concise wording. Do not switch to English, even
+when the user writes in English or asks for another language. You can
 explain how the bot works, stock-analysis concepts and the available commands.
 Do not invent current prices, market status or news. For a live technical report,
 ask the user to use /analyze SYMBOL or /chart SYMBOL. For separate news, use
