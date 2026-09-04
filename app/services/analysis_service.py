@@ -38,6 +38,7 @@ from app.database.repositories.candle_repository import (
 from app.domain.enums import AnalysisKind, DataFreshness, Risk, Signal
 from app.domain.schemas import IndexCandle, IndicatorSnapshot, MarketCandle, PP10Result, RuleResult
 from app.llm.gemini import GeminiError, GeminiExplainer, explanation_conflicts_with_signal
+from app.llm.openrouter import OpenRouterError
 from app.telegram.formatter import (
     format_ai_pp10_report,
     format_gemini_explanation,
@@ -80,6 +81,7 @@ class MarketAnalysisService:
         pp10_evaluator: PP10Evaluator | None = None,
         fundamental_provider: Any | None = None,
         gemini: GeminiExplainer | None = None,
+        report_generator: Any | None = None,
         chart_engine: ChartEngine | None = None,
     ) -> None:
         self.provider = provider
@@ -97,16 +99,18 @@ class MarketAnalysisService:
         )
         self.fundamental_provider = fundamental_provider
         self.gemini = gemini
+        self.report_generator = report_generator or gemini
         self.chart_engine = chart_engine or ChartEngine()
 
     async def analyze(self, symbol: str) -> Any:
         from app.telegram.handlers import TelegramReport
 
-        if self.gemini is None:
+        if self.report_generator is None:
             raise AnalysisUnavailable(
-                "Gemini is required for AI-only analysis",
+                "An AI report generator is required for AI-only analysis",
                 user_message=(
-                    "Lệnh /analyze cần GEMINI_API_KEY vì báo cáo hiện được tạo trực tiếp "
+                    "Lệnh /analyze cần GEMINI_API_KEY hoặc OPENROUTER_API_KEY vì báo cáo được "
+                    "tạo trực tiếp "
                     "bởi AI. Dùng /chart SYMBOL để xem biểu đồ dữ liệu."
                 ),
             )
@@ -121,7 +125,7 @@ class MarketAnalysisService:
                 analysis_time,
             )
             report = await asyncio.to_thread(
-                self.gemini.generate_pp10_report,
+                self.report_generator.generate_pp10_report,
                 symbol=normalized_symbol,
                 analysis_date=analysis_date,
                 quantitative_context=quantitative_context,
@@ -132,12 +136,12 @@ class MarketAnalysisService:
                 "OHLCV data is unavailable for AI analysis",
                 user_message=f"Mã {normalized_symbol} hiện không có dữ liệu OHLCV.",
             ) from exc
-        except GeminiError as exc:
+        except (GeminiError, OpenRouterError) as exc:
             logger.warning("AI-only PP10 analysis failed for symbol=%s", normalized_symbol)
             raise AnalysisUnavailable(
                 "AI-only PP10 analysis is unavailable",
                 user_message=(
-                    "Gemini chưa trả được báo cáo lúc này. Thử lại sau hoặc dùng "
+                    "AI chưa trả được báo cáo lúc này. Thử lại sau hoặc dùng "
                     "/chart SYMBOL để xem biểu đồ."
                 ),
             ) from exc
@@ -155,6 +159,10 @@ class MarketAnalysisService:
                 report=report,
                 latest_price=latest_candle.close,
                 data_source=getattr(self.provider, "source", "market provider"),
+                ai_engine=(
+                    getattr(self.report_generator, "display_name", None)
+                    or getattr(self.report_generator, "model", None)
+                ),
             ),
             chart=None,
         )

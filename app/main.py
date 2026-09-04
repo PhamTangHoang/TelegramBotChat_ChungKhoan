@@ -29,6 +29,7 @@ async def lifespan(_: FastAPI):
             from app.data.providers.vnstock import VnstockProvider
             from app.database.connection import SessionLocal
             from app.llm.gemini import GeminiExplainer
+            from app.llm.openrouter import HybridReportGenerator, OpenRouterDebateExplainer
             from app.scheduler.scheduler import SchedulerService
             from app.services.analysis_service import MarketAnalysisService
             from app.services.news_service import NewsService
@@ -40,21 +41,51 @@ async def lifespan(_: FastAPI):
                 session_factory=SessionLocal,
                 settings=settings,
             )
+            gemini = (
+                GeminiExplainer(
+                    api_key=settings.gemini_api_key,
+                    model=settings.gemini_model,
+                    timeout_seconds=settings.gemini_timeout_seconds,
+                )
+                if settings.gemini_api_key
+                else None
+            )
+            openrouter = (
+                OpenRouterDebateExplainer(
+                    api_key=settings.openrouter_api_key,
+                    analyst_models=settings.openrouter_analyst_models,
+                    judge_model=settings.openrouter_judge_model,
+                    fallback_models=settings.openrouter_fallback_models,
+                    base_url=settings.openrouter_base_url,
+                    timeout_seconds=settings.openrouter_timeout_seconds,
+                    max_parallel=settings.openrouter_max_parallel,
+                    data_collection=settings.openrouter_data_collection,
+                )
+                if settings.openrouter_api_key
+                else None
+            )
+            if settings.llm_provider == "gemini":
+                report_generator = gemini
+            elif settings.llm_provider == "openrouter":
+                report_generator = openrouter
+            elif openrouter is not None and gemini is not None:
+                report_generator = HybridReportGenerator(primary=openrouter, fallback=gemini)
+            else:
+                report_generator = openrouter or gemini
+            logger.info(
+                "AI report backend configured provider=%s openrouter=%s gemini=%s",
+                settings.llm_provider,
+                openrouter is not None,
+                gemini is not None,
+            )
             service = MarketAnalysisService(
                 provider=VnstockProvider(source=settings.vnstock_source),
                 session_factory=SessionLocal,
                 calendar=calendar,
                 settings=settings,
                 fundamental_provider=VnstockFundamentalProvider(source=settings.vnstock_source),
-                gemini=(
-                    GeminiExplainer(
-                        api_key=settings.gemini_api_key,
-                        model=settings.gemini_model,
-                        timeout_seconds=settings.gemini_timeout_seconds,
-                    )
-                    if settings.gemini_api_key
-                    else None
-                ),
+                gemini=gemini,
+                report_generator=report_generator,
             )
             scheduler_service = SchedulerService(
                 settings=settings,

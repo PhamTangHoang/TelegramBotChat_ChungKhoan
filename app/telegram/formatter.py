@@ -201,6 +201,7 @@ def format_ai_pp10_report(
     report: Any,
     latest_price: Any | None = None,
     data_source: str | None = None,
+    ai_engine: str | None = None,
 ) -> str:
     criteria_by_id = {criterion.criterion_id: criterion for criterion in report.criteria}
     if latest_price is None:
@@ -231,6 +232,7 @@ def format_ai_pp10_report(
             mode_line,
             data_line,
             *([source_line] if source_line else []),
+            *([f"Luồng AI: {ai_engine}"] if ai_engine else []),
         "",
         "1. TỔNG ĐIỂM PP10ULTI 2.0",
         f"Tổng điểm AI tham khảo: {report.total_score}/100",

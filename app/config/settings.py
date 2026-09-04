@@ -41,6 +41,19 @@ class Settings(BaseSettings):
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-3.1-flash-lite"
     gemini_timeout_seconds: float = Field(default=20.0, gt=0, le=120)
+    llm_provider: str = "hybrid"
+    openrouter_api_key: str | None = None
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    openrouter_analyst_models: CsvValues = (
+        "openrouter/free",
+        "openrouter/free",
+        "openrouter/free",
+    )
+    openrouter_judge_model: str = "openrouter/free"
+    openrouter_fallback_models: CsvValues = ()
+    openrouter_timeout_seconds: float = Field(default=45.0, gt=0, le=180)
+    openrouter_max_parallel: int = Field(default=3, ge=1, le=3)
+    openrouter_data_collection: str = "deny"
     telegram_bot_token: str | None = None
     telegram_public_access: bool = False
     telegram_allowed_chat_ids: CsvInts = Field(default_factory=tuple)
@@ -82,7 +95,7 @@ class Settings(BaseSettings):
             raise ValueError("eod_settle_job_time must use a valid time")
         return f"{hour:02d}:{minute:02d}"
 
-    @field_validator("gemini_api_key", "telegram_bot_token", mode="before")
+    @field_validator("gemini_api_key", "openrouter_api_key", "telegram_bot_token", mode="before")
     @classmethod
     def normalize_optional_credentials(cls, value: str | None) -> str | None:
         if value is None:
@@ -96,6 +109,22 @@ class Settings(BaseSettings):
         normalized = value.strip().upper()
         if normalized not in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}:
             raise ValueError("unsupported log level")
+        return normalized
+
+    @field_validator("llm_provider")
+    @classmethod
+    def normalize_llm_provider(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"gemini", "openrouter", "hybrid"}:
+            raise ValueError("llm_provider must be gemini, openrouter, or hybrid")
+        return normalized
+
+    @field_validator("openrouter_data_collection")
+    @classmethod
+    def normalize_openrouter_data_collection(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"allow", "deny"}:
+            raise ValueError("openrouter_data_collection must be allow or deny")
         return normalized
 
     @field_validator("vnstock_source")

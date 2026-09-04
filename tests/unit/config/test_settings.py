@@ -57,3 +57,26 @@ def test_settings_defaults_to_supported_low_latency_gemini_model() -> None:
 
     assert settings.gemini_model == "gemini-3.1-flash-lite"
     assert settings.gemini_timeout_seconds == 20.0
+
+
+def test_settings_parse_openrouter_debate_configuration() -> None:
+    settings = Settings(
+        database_url="sqlite+pysqlite:///:memory:",
+        _env_file=None,
+        llm_provider="openrouter",
+        openrouter_api_key="test-key",
+        openrouter_analyst_models="technical:free, pattern:free, risk:free",
+        openrouter_judge_model="judge:free",
+        openrouter_fallback_models="fallback-a:free, fallback-b:free",
+        openrouter_max_parallel=2,
+    )
+
+    assert settings.llm_provider == "openrouter"
+    assert settings.openrouter_analyst_models == (
+        "technical:free",
+        "pattern:free",
+        "risk:free",
+    )
+    assert settings.openrouter_judge_model == "judge:free"
+    assert settings.openrouter_fallback_models == ("fallback-a:free", "fallback-b:free")
+    assert settings.openrouter_max_parallel == 2

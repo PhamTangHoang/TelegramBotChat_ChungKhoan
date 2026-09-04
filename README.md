@@ -1,12 +1,12 @@
 # VN Stock Analyst Bot
 
-Bot Telegram hỗ trợ báo cáo PP10Ulti 2.0 bằng Gemini theo prompt mẫu. Lệnh
+Bot Telegram hỗ trợ báo cáo PP10Ulti 2.0 bằng AI theo prompt mẫu. Lệnh
 `/analyze SYMBOL` lấy OHLCV cơ bản rồi gửi trực tiếp cho AI, không cào dữ liệu
 phân tích chuyên biệt;
 `/chart`, `/market` và `/news` là các tính năng dữ liệu riêng.
 
 Luồng `/analyze` là AI-generated từ OHLCV. Điểm, xếp hạng, vùng giá và kịch bản
-trong báo cáo là nhận định tham khảo của Gemini; các mục ngoài OHLCV không được
+trong báo cáo là nhận định tham khảo của AI; các mục ngoài OHLCV không được
 xem là số liệu đã xác minh hay khuyến nghị đầu tư. Tin tức là module riêng.
 
 > Đây là công cụ tham khảo/kỹ thuật, không phải dịch vụ tư vấn đầu tư. Điểm số
@@ -18,8 +18,8 @@ xem là số liệu đã xác minh hay khuyến nghị đầu tư. Tin tức là
 
 - Docker Desktop hoặc Docker Engine có Docker Compose.
 - Telegram bot token nếu muốn chạy bot Telegram.
-- Gemini API key là bắt buộc cho `/analyze` và chat tự nhiên.
-- Kết nối Internet để lấy OHLCV, dùng Gemini, `/chart`, `/market` và RSS.
+- Cần ít nhất một trong `GEMINI_API_KEY` hoặc `OPENROUTER_API_KEY` cho `/analyze`.
+- Kết nối Internet để lấy OHLCV, gọi Gemini/OpenRouter, `/chart`, `/market` và RSS.
 
 ### Cài đặt
 
@@ -33,6 +33,8 @@ Mở file .env và bổ sung các biến cần thiết, tối thiểu khi chạy
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 TELEGRAM_PUBLIC_ACCESS=true
 GEMINI_API_KEY=your_gemini_api_key
+OPENROUTER_API_KEY=your_openrouter_api_key
+LLM_PROVIDER=hybrid
 NEWS_FEED_URLS=https://cafef.vn/thi-truong-chung-khoan.rss,https://thanhnien.vn/rss/kinh-te/chung-khoan.rss
 NEWS_ALLOWED_DOMAINS=cafef.vn,thanhnien.vn
 ~~~
@@ -113,11 +115,36 @@ hiển thị theo điểm chỉ số, không phải VND.
 | GEMINI_MODEL | Không | gemini-3.1-flash-lite | Model dùng để tạo báo cáo PP10 structured JSON. |
 | GEMINI_TIMEOUT_SECONDS | Không | 20 | Timeout HTTP cho Gemini; không đặt dưới 10 giây. |
 
-Lệnh `/analyze` gọi provider đúng một lần để lấy OHLCV rồi gửi dữ liệu đó cho
-Gemini. Luồng này không gọi fundamentals, VN-Index, RSS hoặc chart. Prompt yêu
-cầu Gemini không bịa giá/chỉ báo ngoài dữ liệu OHLCV, tin tức, link hay vùng giá;
+Lệnh `/analyze` lấy OHLCV một lần rồi gửi dữ liệu đó cho provider AI. Khi dùng
+OpenRouter, ba analyst chạy song song và một Judge tổng hợp; khi dùng Gemini chỉ
+có một lượt tạo báo cáo. Luồng này không gọi fundamentals, VN-Index, RSS hoặc
+chart. Prompt yêu cầu AI không bịa giá/chỉ báo ngoài dữ liệu OHLCV, tin tức, link hay vùng giá;
 phần thiếu dữ liệu phải ghi rõ. Điểm số và nhận định vẫn là nội dung AI tạo để
 tham khảo, không phải signal đã xác minh.
+
+### OpenRouter và hội đồng AI
+
+| Biến | Bắt buộc | Mặc định | Ý nghĩa |
+| --- | --- | --- | --- |
+| LLM_PROVIDER | Không | hybrid | `gemini`, `openrouter` hoặc `hybrid`. `hybrid` ưu tiên hội đồng OpenRouter và fallback Gemini. |
+| OPENROUTER_API_KEY | Có nếu dùng OpenRouter | rỗng | API key tạo tại OpenRouter. |
+| OPENROUTER_ANALYST_MODELS | Không | `openrouter/free` x 3 | Ba model analyst; nên khai báo 3 model khác nhau nếu muốn tranh luận đa dạng. |
+| OPENROUTER_JUDGE_MODEL | Không | `openrouter/free` | Model Judge tổng hợp thành một báo cáo PP10Ulti. |
+| OPENROUTER_FALLBACK_MODELS | Không | rỗng | Các model dự phòng cho lượt Judge, cách nhau bằng dấu phẩy. |
+| OPENROUTER_TIMEOUT_SECONDS | Không | 45 | Timeout cho từng request OpenRouter. |
+| OPENROUTER_MAX_PARALLEL | Không | 3 | Số analyst chạy song song, tối đa 3. |
+| OPENROUTER_DATA_COLLECTION | Không | deny | Chính sách dữ liệu gửi tới provider; `deny` ưu tiên riêng tư hơn. |
+
+Khi chạy `/analyze`, ba analyst được gọi song song theo các vai trò kỹ thuật,
+cấu trúc/mẫu hình và rủi ro/phản biện. Model Judge đọc các bản nháp, đối chiếu
+với OHLCV rồi trả đúng schema PP10Ulti 2.0. Các analyst thất bại vẫn được bỏ qua
+nếu còn ít nhất một bản nháp; nếu OpenRouter lỗi hoàn toàn và `LLM_PROVIDER=hybrid`
+thì bot fallback sang Gemini.
+
+OpenRouter dùng endpoint tương thích OpenAI và structured JSON cho báo cáo. Với
+`openrouter/free`, model thực tế có thể thay đổi theo availability và giới hạn
+của tài khoản; muốn kết quả ổn định hơn hãy khai báo model ID cụ thể trong
+`OPENROUTER_ANALYST_MODELS` và `OPENROUTER_JUDGE_MODEL`.
 
 ### Tin tức RSS
 
@@ -162,7 +189,7 @@ Các lệnh public:
 | --- | --- |
 | /start | Khởi động và xem hướng dẫn nhanh. |
 | /help | Xem toàn bộ lệnh. |
-| /analyze FPT | Lấy OHLCV cơ bản và nhờ Gemini tạo báo cáo PP10Ulti theo prompt mẫu. |
+| /analyze FPT | Lấy OHLCV cơ bản và nhờ AI hoặc hội đồng OpenRouter tạo báo cáo PP10Ulti. |
 | /chart FPT | Tạo và gửi biểu đồ kỹ thuật. |
 | /news FPT | Xem tin liên quan đến FPT, kèm link bài gốc. |
 | /news | Xem tin thị trường chung. |
@@ -195,11 +222,11 @@ Một báo cáo PP10Ulti 2.0 do AI tạo gồm các phần chính:
    định giá/vĩ mô và quản trị vị thế.
 4. Kế hoạch hành động tham khảo với ba kịch bản, vùng giá, stop-loss, mục tiêu
    và R:R.
-5. Kết luận và lưu ý rằng Gemini chỉ nhận OHLCV cùng các dữ liệu được cung cấp.
+5. Kết luận và lưu ý rằng AI chỉ nhận OHLCV cùng các dữ liệu được cung cấp.
 
 ### PP10Ulti
 
-Prompt PP10 yêu cầu Gemini nhận xét các nhóm xu hướng MA, Wyckoff, mẫu hình,
+Prompt PP10 yêu cầu AI nhận xét các nhóm xu hướng MA, Wyckoff, mẫu hình,
 volume, VPVR, CPR, OBV/CMF, MACD, RSI/ADX, Stochastic RSI, cơ bản, định giá,
 thị trường chung và quản trị vị thế.
 
@@ -212,9 +239,9 @@ xác minh.
 News được gọi riêng bằng /news, không được đưa vào score PP10Ulti. Điều này giúp
 phân biệt rõ:
 
-- Báo cáo AI: nội dung do Gemini tạo từ OHLCV, không dùng news để chấm điểm.
+- Báo cáo AI: nội dung do Gemini hoặc OpenRouter tạo từ OHLCV, không dùng news để chấm điểm.
 - Thông tin sự kiện: tiêu đề/tóm tắt RSS và link bài gốc.
-- Gemini không được dùng tin tức vì news vẫn là module `/news` riêng.
+- AI không được dùng tin tức vì news vẫn là module `/news` riêng.
 
 ## Chạy test và phát triển
 
@@ -320,15 +347,15 @@ demo ngắn hạn hoặc khi đổi kiến trúc sang webhook/database bên ngo�
 | Hiện tượng | Nguyên nhân thường gặp | Cách kiểm tra/xử lý |
 | --- | --- | --- |
 | /start trả Yêu cầu bị từ chối | Đang whitelist nhưng chat ID chưa được khai báo. | Test bằng TELEGRAM_PUBLIC_ACCESS=true, hoặc thêm ID vào TELEGRAM_ALLOWED_CHAT_IDS, rồi docker compose up -d. |
-| Bot không phản hồi tin nhắn thường | Không có GEMINI_API_KEY hoặc Gemini lỗi. | Dùng các lệnh kỹ thuật; xem docker compose logs -f app. |
+| Bot không phản hồi tin nhắn thường | Không có GEMINI_API_KEY hoặc Gemini lỗi; OpenRouter hiện chỉ dùng cho `/analyze`. | Dùng các lệnh kỹ thuật; xem docker compose logs -f app. |
 | Gemini 400 deadline too short | Timeout thấp hơn giới hạn API. | Đặt GEMINI_TIMEOUT_SECONDS=20 hoặc cao hơn. |
 | Gemini 504 DEADLINE_EXCEEDED | Model quá chậm hoặc API tạm thời quá tải. | Dùng gemini-3.1-flash-lite, timeout 20, rebuild container; technical report vẫn được trả nếu Gemini thất bại. |
 | /news ACB rỗng | Feed chưa cấu hình, bài nằm ngoài lookback, hoặc bài không nhắc chính xác ticker. | Kiểm tra NEWS_FEED_URLS, NEWS_LOOKBACK_HOURS và log RSS; /news dùng để xem tin chung. |
 | News có tiêu đề nhưng không có bài liên quan | Đang gọi /news nên bot trả tin thị trường chung. | Gọi /news SYMBOL, ví dụ /news FPT. |
 | /market báo không ở regular trading session | Gọi ngoài giờ HOSE. | Giờ regular mặc định: 09:00–11:30 và 13:00–14:45; ngày nghỉ vẫn không có phiên. |
 | Một số PP10 hiện DATA_UNAVAILABLE | Provider chưa cung cấp dữ liệu chuyên biệt hoặc chưa đủ lịch sử. | Đây là trạng thái an toàn; không tự thay bằng giá trị ước đoán. |
-| /analyze chạy lâu | Gemini đang xử lý structured JSON hoặc instance đang khởi động. | Đặt `GEMINI_TIMEOUT_SECONDS` phù hợp, xem log `Gemini PP10 report`; lệnh này không gọi vnstock. |
-| /analyze báo cần GEMINI_API_KEY | Luồng báo cáo cần Gemini để viết report. | Bổ sung `GEMINI_API_KEY`; dùng `/chart`, `/market` hoặc `/news` cho tính năng dữ liệu riêng. |
+| /analyze chạy lâu | OpenRouter đang chạy analyst song song rồi chờ Judge, hoặc instance đang khởi động. | Xem log `AI report backend configured` và log OpenRouter; giảm số model nếu cần. |
+| /analyze báo thiếu API key | Chưa có provider AI khả dụng. | Bổ sung `GEMINI_API_KEY` hoặc `OPENROUTER_API_KEY`; dùng `/chart`, `/market` hoặc `/news` cho tính năng dữ liệu riêng. |
 
 ## Cấu trúc project
 
@@ -341,7 +368,7 @@ app/
 ├── data/providers/ # vnstock, fundamentals và RSS adapters
 ├── database/       # SQLAlchemy models, connection và repositories
 ├── domain/         # Enum và Pydantic schemas
-├── llm/            # Gemini client, prompt và schema
+├── llm/            # Gemini/OpenRouter clients, debate prompt và schema
 ├── market/         # Lịch giao dịch HOSE
 ├── scheduler/      # Job market, news và EOD settle
 ├── services/       # AnalysisService và NewsService
