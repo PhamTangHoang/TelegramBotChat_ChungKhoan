@@ -1,42 +1,67 @@
-import asyncio
-import threading
-from datetime import datetime
-from decimal import Decimal
 from types import SimpleNamespace
 
-from app.analysis.pp10 import PP10Evaluator
-from app.domain.enums import Risk, Signal
-from app.domain.schemas import IndicatorSnapshot, RuleResult
-from app.llm.schemas import GeminiExplanation
-from app.services.analysis_service import AnalysisOutput, MarketAnalysisService
+from app.llm.schemas import PP10AIAction, PP10AICriterion, PP10AIReport
+from app.services.analysis_service import MarketAnalysisService
 
 
-class SlowGemini:
+class DirectGemini:
     model = "test-model"
 
-    def __init__(self) -> None:
-        self.started = threading.Event()
-        self.release = threading.Event()
-
-    def explain(self, **kwargs: object) -> GeminiExplanation:
-        self.started.set()
-        assert self.release.wait(timeout=2)
-        return GeminiExplanation(
-            market_summary="Tóm tắt thị trường.",
-            technical_explanation="Phân tích kỹ thuật.",
-            news_context="Không có tin được truyền vào.",
-            bull_case="Kịch bản tích cực.",
-            bear_case="Kịch bản tiêu cực.",
-            risk="Rủi ro trung bình.",
-            conclusion="Tiếp tục theo dõi.",
+    def generate_pp10_report(self, **kwargs: object) -> PP10AIReport:
+        maximums = (10, 8, 8, 8, 8, 8, 7, 5, 6, 8, 4, 5, 5, 4, 4, 2)
+        return PP10AIReport(
+            total_score=64,
+            grade="B",
+            confidence="LOW",
+            signal="TRUNG TÍNH",
+            risk="TRUNG BÌNH",
+            preliminary_conclusion="Đây là nhận định AI, chưa có dữ liệu live.",
+            criteria=[
+                PP10AICriterion(
+                    criterion_id=index,
+                    score=0,
+                    status="AI_INFERENCE",
+                    assessment="AI suy luận tham khảo.",
+                    data_note="Không có dữ liệu live.",
+                )
+                for index, _ in enumerate(maximums, start=1)
+            ],
+            action_plan=[
+                PP10AIAction(
+                    scenario="Kịch bản 1 (Tích cực)",
+                    price_zone="Chưa xác định",
+                    strategy="Chờ xác nhận.",
+                ),
+                PP10AIAction(
+                    scenario="Kịch bản 2 (Trung tính)",
+                    price_zone="Chưa xác định",
+                    strategy="Theo dõi.",
+                ),
+                PP10AIAction(
+                    scenario="Kịch bản 3 (Tiêu cực)",
+                    price_zone="Chưa xác định",
+                    strategy="Không kết luận.",
+                ),
+            ],
+            conclusion_action="CHỈ THAM KHẢO",
+            conclusion_reason="Cần dữ liệu thực tế.",
+            expectation="Chưa thể xác định.",
+            key_note="Không có dữ liệu live.",
         )
 
 
-def test_analyze_returns_technical_report_before_gemini_finishes() -> None:
-    gemini = SlowGemini()
+def test_analyze_uses_gemini_directly_without_market_provider() -> None:
+    gemini = DirectGemini()
+
+    class FailingProvider:
+        def get_ohlcv(self, *args: object, **kwargs: object) -> None:
+            raise AssertionError("AI-only analyze must not call the market provider")
+
     service = MarketAnalysisService(
-        provider=object(),
-        session_factory=lambda: None,
+        provider=FailingProvider(),
+        session_factory=lambda: (_ for _ in ()).throw(
+            AssertionError("AI-only analyze must not open a database session")
+        ),
         calendar=object(),
         settings=SimpleNamespace(
             rule_version="1.5.0",
@@ -46,43 +71,12 @@ def test_analyze_returns_technical_report_before_gemini_finishes() -> None:
         ),
         gemini=gemini,
     )
-    indicators = IndicatorSnapshot(
-        price=Decimal("100"),
-        elapsed_trading_minutes=60,
-        as_of=datetime(2026, 9, 3, 3),
-        is_final=False,
-    )
-    output = AnalysisOutput(
-        symbol="FPT",
-        text="Báo cáo PP10 kỹ thuật",
-        chart=None,
-        indicators=indicators,
-        rule_result=RuleResult(
-            score=0,
-            max_score=0,
-            signal=Signal.INSUFFICIENT_DATA,
-            confidence_raw=None,
-            reasons=[],
-            risk=Risk.LOW,
-            risk_points=0,
-            risk_reasons=[],
-            rule_version="1.5.0",
-        ),
-        pp10_result=PP10Evaluator().evaluate(indicators),
-        analysis_run_id=None,
-    )
-    service.run_sync = lambda symbol, **kwargs: output  # type: ignore[method-assign]
 
-    async def scenario() -> None:
-        report = await service.analyze("FPT")
+    import asyncio
 
-        assert report.text == "Báo cáo PP10 kỹ thuật"
-        assert report.gemini_task is not None
-        assert await asyncio.to_thread(gemini.started.wait, 1)
+    report = asyncio.run(service.analyze("fpt"))
 
-        gemini.release.set()
-        follow_up = await report.gemini_task
-        assert follow_up is not None
-        assert "GIẢI THÍCH GEMINI" in follow_up
-
-    asyncio.run(scenario())
+    assert report.chart is None
+    assert "BÁO CÁO PP10ULTI 2.0 – FPT" in report.text
+    assert "AI" in report.text
+    assert report.gemini_task is None

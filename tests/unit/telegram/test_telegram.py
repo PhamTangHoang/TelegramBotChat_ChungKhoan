@@ -9,7 +9,12 @@ from app.domain.enums import AnalysisKind, DataFreshness, EvaluationStatus, Risk
 from app.domain.schemas import IndicatorSnapshot, RuleReason, RuleResult
 from app.telegram.access_control import AccessDenied, RateLimiter, WhitelistAccessController
 from app.telegram.commands import HELP_TEXT, command_menu
-from app.telegram.formatter import chunk_message, format_news_report, format_technical_report
+from app.telegram.formatter import (
+    chunk_message,
+    format_ai_pp10_report,
+    format_news_report,
+    format_technical_report,
+)
 from app.telegram.handlers import TelegramReport, _classify_text, _send_analysis_report
 
 
@@ -315,6 +320,51 @@ def test_pp10_report_uses_structured_vietnamese_summary_and_action_plan() -> Non
     assert "🔔 KẾT LUẬN" in report
     assert "POSITION PLAN" not in report
     assert "GEMINI ANALYSIS" not in report
+
+
+def test_ai_pp10_report_uses_sample_headings_without_market_data_or_chart() -> None:
+    report = format_ai_pp10_report(
+        symbol="fpt",
+        as_of=datetime(2026, 9, 4, 9, 0),
+        report=SimpleNamespace(
+            total_score=64,
+            grade="B",
+            confidence="LOW",
+            signal="TRUNG TÍNH",
+            risk="TRUNG BÌNH",
+            preliminary_conclusion="Đây là nhận định AI.",
+            criteria=[
+                SimpleNamespace(
+                    criterion_id=index,
+                    score=0,
+                    status="AI_INFERENCE",
+                    assessment="AI suy luận tham khảo.",
+                    data_note="Không có dữ liệu live.",
+                )
+                for index in range(1, 17)
+            ],
+            action_plan=[
+                SimpleNamespace(
+                    scenario=f"Kịch bản {index}",
+                    price_zone="Chưa xác định",
+                    strategy="Theo dõi.",
+                )
+                for index in range(1, 4)
+            ],
+            conclusion_action="CHỈ THAM KHẢO",
+            conclusion_reason="Cần dữ liệu thực tế.",
+            expectation="Chưa xác định.",
+            key_note="Không có dữ liệu live.",
+        ),
+    )
+
+    assert "BÁO CÁO PP10ULTI 2.0 – FPT" in report
+    assert "Tổng điểm AI tham khảo: 64/100" in report
+    assert "NHÓM KỸ THUẬT" in report
+    assert "🤖 AI SUY LUẬN" in report
+    assert "3. KẾ HOẠCH HÀNH ĐỘNG THAM KHẢO" in report
+    assert "không cào dữ liệu live" in report
+    assert "[ Photo ]" not in report
 
 
 def test_analysis_sender_delivers_gemini_follow_up_after_technical_report() -> None:

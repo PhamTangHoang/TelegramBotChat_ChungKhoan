@@ -12,7 +12,7 @@ class CommandSpec:
 TELEGRAM_COMMANDS: tuple[CommandSpec, ...] = (
     CommandSpec(command="start", description="Bắt đầu và xem hướng dẫn"),
     CommandSpec(command="help", description="Xem danh sách lệnh"),
-    CommandSpec(command="analyze", description="Phân tích cổ phiếu: /analyze FPT"),
+    CommandSpec(command="analyze", description="AI phân tích PP10Ulti: /analyze FPT"),
     CommandSpec(command="chart", description="Xem biểu đồ: /chart FPT"),
     CommandSpec(command="news", description="Xem tin tức: /news FPT"),
     CommandSpec(command="market", description="Xem trạng thái thị trường"),
@@ -22,7 +22,7 @@ TELEGRAM_COMMANDS: tuple[CommandSpec, ...] = (
 HELP_TEXT = """VN Stock Analyst Bot hỗ trợ:
 
 /analyze FPT
-Phân tích kỹ thuật và bộ tiêu chí PP10Ulti của FPT.
+Gemini tạo báo cáo PP10Ulti 2.0 của FPT theo prompt mẫu. Lệnh này không cào dữ liệu live.
 
 /chart FPT
 Xem biểu đồ kỹ thuật của FPT.
@@ -35,7 +35,7 @@ Xem trạng thái phiên giao dịch thị trường.
 
 Bạn cũng có thể nhắn tự nhiên, ví dụ: "phân tích FPT" hoặc "tin tức FPT".
 
-Lưu ý: Kết quả chỉ nhằm mục đích tham khảo và giáo dục, không phải khuyến nghị đầu tư."""
+Lưu ý: /analyze là nội dung AI tạo, không phải dữ liệu realtime hay khuyến nghị đầu tư."""
 
 
 def command_menu() -> list[CommandSpec]:

@@ -38,7 +38,11 @@ from app.database.repositories.candle_repository import (
 from app.domain.enums import AnalysisKind, DataFreshness, Risk, Signal
 from app.domain.schemas import IndexCandle, IndicatorSnapshot, MarketCandle, PP10Result, RuleResult
 from app.llm.gemini import GeminiError, GeminiExplainer, explanation_conflicts_with_signal
-from app.telegram.formatter import format_gemini_explanation, format_technical_report
+from app.telegram.formatter import (
+    format_ai_pp10_report,
+    format_gemini_explanation,
+    format_technical_report,
+)
 
 logger = logging.getLogger(__name__)
 VIETNAM_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
@@ -96,15 +100,44 @@ class MarketAnalysisService:
         self.chart_engine = chart_engine or ChartEngine()
 
     async def analyze(self, symbol: str) -> Any:
-        output = await asyncio.to_thread(self.run_sync, symbol, include_gemini=False)
         from app.telegram.handlers import TelegramReport
 
-        gemini_task = (
-            asyncio.create_task(self._gemini_follow_up(output))
-            if self.gemini is not None
-            else None
+        if self.gemini is None:
+            raise AnalysisUnavailable(
+                "Gemini is required for AI-only analysis",
+                user_message=(
+                    "Lệnh /analyze cần GEMINI_API_KEY vì báo cáo hiện được tạo trực tiếp "
+                    "bởi AI. Dùng /chart SYMBOL để xem biểu đồ dữ liệu."
+                ),
+            )
+
+        normalized_symbol = symbol.strip().upper()
+        analysis_time = datetime.now(VIETNAM_TZ)
+        analysis_date = analysis_time.strftime("%Y-%m-%d %H:%M:%S%z")
+        try:
+            report = await asyncio.to_thread(
+                self.gemini.generate_pp10_report,
+                symbol=normalized_symbol,
+                analysis_date=analysis_date,
+            )
+        except GeminiError as exc:
+            logger.warning("AI-only PP10 analysis failed for symbol=%s", normalized_symbol)
+            raise AnalysisUnavailable(
+                "AI-only PP10 analysis is unavailable",
+                user_message=(
+                    "Gemini chưa trả được báo cáo lúc này. Thử lại sau hoặc dùng "
+                    "/chart SYMBOL để xem biểu đồ."
+                ),
+            ) from exc
+
+        return TelegramReport(
+            text=format_ai_pp10_report(
+                symbol=normalized_symbol,
+                as_of=analysis_time,
+                report=report,
+            ),
+            chart=None,
         )
-        return TelegramReport(text=output.text, chart=output.chart, gemini_task=gemini_task)
 
     async def _gemini_follow_up(self, output: AnalysisOutput) -> str | None:
         try:

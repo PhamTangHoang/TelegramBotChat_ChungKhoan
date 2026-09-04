@@ -6,8 +6,8 @@ from copy import deepcopy
 from typing import Any
 
 from app.domain.enums import Signal
-from app.llm.prompts import build_chat_prompt, build_prompt
-from app.llm.schemas import GeminiExplanation
+from app.llm.prompts import build_chat_prompt, build_pp10_prompt, build_prompt
+from app.llm.schemas import GeminiExplanation, PP10AIReport
 
 logger = logging.getLogger(__name__)
 _MIN_GEMINI_TIMEOUT_SECONDS = 10.0
@@ -15,6 +15,11 @@ _MIN_GEMINI_TIMEOUT_SECONDS = 10.0
 
 def _gemini_response_schema() -> dict[str, Any]:
     schema = deepcopy(GeminiExplanation.model_json_schema())
+    return _remove_unsupported_schema_fields(schema)
+
+
+def _pp10_response_schema() -> dict[str, Any]:
+    schema = deepcopy(PP10AIReport.model_json_schema())
     return _remove_unsupported_schema_fields(schema)
 
 
@@ -107,6 +112,36 @@ class GeminiExplainer:
             logger.warning("Gemini returned invalid structured explanation", exc_info=True)
             raise GeminiError("Gemini response failed schema validation") from exc
 
+    def generate_pp10_report(self, *, symbol: str, analysis_date: str) -> PP10AIReport:
+        prompt = build_pp10_prompt(symbol=symbol, analysis_date=analysis_date)
+        try:
+            from google.genai import types
+
+            response = self.client.models.generate_content(
+                model=self.model,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=_pp10_response_schema(),
+                    temperature=0.2,
+                ),
+            )
+        except Exception as exc:  # network/API failures must be recoverable by the caller
+            logger.warning("Gemini PP10 report failed", exc_info=True)
+            raise GeminiError("Gemini PP10 report request failed") from exc
+
+        try:
+            parsed = getattr(response, "parsed", None)
+            if parsed is not None:
+                return PP10AIReport.model_validate(parsed)
+            text = getattr(response, "text", None)
+            if not isinstance(text, str) or not text.strip():
+                raise ValueError("Gemini returned no PP10 report")
+            return _parse_pp10_report_text(text)
+        except Exception as exc:
+            logger.warning("Gemini returned invalid PP10 report", exc_info=True)
+            raise GeminiError("Gemini PP10 report failed schema validation") from exc
+
     def chat(self, message: str) -> str:
         prompt = build_chat_prompt(message)
         try:
@@ -142,6 +177,23 @@ def _parse_explanation_text(text: str) -> GeminiExplanation:
         raise ValueError("Gemini response does not contain a JSON object")
     payload, _ = json.JSONDecoder().raw_decode(candidate[start:])
     return GeminiExplanation.model_validate(payload)
+
+
+def _parse_pp10_report_text(text: str) -> PP10AIReport:
+    """Parse a PP10 JSON object even when the provider wraps it in a code fence."""
+    candidate = text.strip()
+    if candidate.startswith("```"):
+        first_newline = candidate.find("\n")
+        if first_newline >= 0:
+            candidate = candidate[first_newline + 1 :].strip()
+        if candidate.endswith("```"):
+            candidate = candidate[:-3].rstrip()
+
+    start = candidate.find("{")
+    if start < 0:
+        raise ValueError("Gemini PP10 response does not contain a JSON object")
+    payload, _ = json.JSONDecoder().raw_decode(candidate[start:])
+    return PP10AIReport.model_validate(payload)
 
 
 def explanation_conflicts_with_signal(explanation: GeminiExplanation, signal: Signal) -> bool:

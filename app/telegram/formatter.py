@@ -7,6 +7,7 @@ from typing import Any
 
 from app.data.news_text import sanitize_news_text
 from app.domain.enums import AnalysisKind, DataFreshness, EvaluationStatus, RuleStatus, Signal
+from app.llm.schemas import PP10_MAX_SCORES
 
 DISCLAIMER = (
     "Công cụ hỗ trợ phân tích cá nhân, không phải khuyến nghị đầu tư. "
@@ -21,6 +22,25 @@ _PP10_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("NHÓM ĐỊNH GIÁ & VĨ MÔ", ("14", "15")),
     ("NHÓM QUẢN TRỊ VỊ THẾ", ("16",)),
 )
+
+_AI_PP10_NAMES = {
+    1: "Xu hướng MA tổng thể",
+    2: "Pha Wyckoff",
+    3: "Mẫu hình Dan Zanger",
+    4: "Xác nhận Peter Brandt",
+    5: "RS Rating và RS Line",
+    6: "Khối lượng và breakout",
+    7: "Volume Profile / VPVR",
+    8: "CPR tuần và tháng",
+    9: "OBV và CMF",
+    10: "MACD",
+    11: "RSI và ADX",
+    12: "Stochastic RSI",
+    13: "Cơ bản doanh nghiệp",
+    14: "Định giá",
+    15: "Xu hướng thị trường chung",
+    16: "Quản trị vị thế",
+}
 
 
 def _analysis_kind_label(analysis_kind: AnalysisKind, is_final: bool) -> str:
@@ -157,6 +177,82 @@ def format_gemini_explanation(gemini: Any) -> str:
             f"• Kết luận: {gemini.conclusion}",
         )
     )
+
+
+def _ai_criterion_status(status: str) -> str:
+    return {
+        "PASS": "✅ ĐẠT",
+        "FAIL": "❌ CHƯA ĐẠT",
+        "DATA_UNAVAILABLE": "⚠️ CHƯA CÓ DỮ LIỆU",
+        "AI_INFERENCE": "🤖 AI SUY LUẬN",
+    }.get(status, "⚠️ KHÔNG RÕ")
+
+
+def _ai_confidence_label(confidence: str) -> str:
+    return {"HIGH": "Cao", "MEDIUM": "Trung bình", "LOW": "Thấp"}.get(
+        confidence, confidence
+    )
+
+
+def format_ai_pp10_report(*, symbol: str, as_of: datetime, report: Any) -> str:
+    criteria_by_id = {criterion.criterion_id: criterion for criterion in report.criteria}
+    lines = [
+        f"BÁO CÁO PP10ULTI 2.0 – {symbol.upper()}",
+        f"Ngày tạo: {as_of.strftime('%d/%m/%Y %H:%M')}",
+        "Chế độ: AI tạo trực tiếp từ prompt — không cào dữ liệu live",
+        "Trạng thái: Không phải phân tích realtime; các nhận định cần tự kiểm chứng",
+        "",
+        "1. TỔNG ĐIỂM PP10ULTI 2.0",
+        f"Tổng điểm AI tham khảo: {report.total_score}/100",
+        f"Xếp hạng: {_grade_stars(report.grade)} {report.grade}",
+        (
+            f"Mức độ tin cậy: {_ai_confidence_label(report.confidence)} "
+            "(AI tự đánh giá, không phải xác suất)"
+        ),
+        f"Tín hiệu AI: {report.signal} | Rủi ro: {report.risk}",
+        f"Kết luận sơ bộ: {report.preliminary_conclusion}",
+        "",
+        "2. CHI TIẾT CÁC HẠNG MỤC",
+        "Hạng mục | Điểm | Nhận xét chi tiết",
+    ]
+
+    for group_name, criterion_ids in _PP10_GROUPS:
+        lines.extend(["", group_name])
+        for criterion_id_text in criterion_ids:
+            criterion_id = int(criterion_id_text)
+            criterion = criteria_by_id[criterion_id]
+            lines.extend(
+                [
+                    (
+                        f"{criterion_id}. {_AI_PP10_NAMES[criterion_id]} | "
+                        f"{criterion.score}/{PP10_MAX_SCORES[criterion_id - 1]} | "
+                        f"{_ai_criterion_status(criterion.status)}"
+                    ),
+                    f"   Nhận xét: {criterion.assessment}",
+                    f"   Dữ liệu: {criterion.data_note}",
+                ]
+            )
+
+    lines.extend(["", "3. KẾ HOẠCH HÀNH ĐỘNG THAM KHẢO"])
+    lines.append("Kịch bản | Vùng giá | Chiến lược")
+    for item in report.action_plan:
+        lines.append(f"{item.scenario} | {item.price_zone} | {item.strategy}")
+
+    lines.extend(
+        [
+            "",
+            "🔔 KẾT LUẬN",
+            f"Hành động: {report.conclusion_action}",
+            f"Lý do: {report.conclusion_reason}",
+            f"Kỳ vọng: {report.expectation}",
+            f"Lưu ý: {report.key_note}",
+            "",
+            "Báo cáo do AI tạo từ prompt, không sử dụng dữ liệu thị trường live và "
+            "không phải khuyến nghị mua/bán.",
+            DISCLAIMER,
+        ]
+    )
+    return "\n".join(lines)
 
 
 def format_technical_report(

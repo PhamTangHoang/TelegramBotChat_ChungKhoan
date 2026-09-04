@@ -86,7 +86,7 @@ async def lifespan(_: FastAPI):
             scheduler.shutdown(wait=False)
 
 
-app = FastAPI(title="VN Stock Analyst Bot", version="1.5.0", lifespan=lifespan)
+app = FastAPI(title="VN Stock Analyst Bot", version="1.6.0", lifespan=lifespan)
 
 
 @app.get("/health")

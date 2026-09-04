@@ -5,7 +5,7 @@ import pytest
 
 from app.domain.enums import Signal
 from app.llm.gemini import GeminiError, GeminiExplainer, explanation_conflicts_with_signal
-from app.llm.schemas import GeminiExplanation
+from app.llm.schemas import GeminiExplanation, PP10AIAction, PP10AICriterion, PP10AIReport
 
 
 def explanation(**overrides: str) -> GeminiExplanation:
@@ -49,6 +49,65 @@ def test_gemini_uses_structured_schema_and_validates_response() -> None:
     assert config.response_mime_type == "application/json"
     assert config.response_schema["title"] == "GeminiExplanation"
     assert "additionalProperties" not in config.response_schema
+
+
+def _ai_report() -> PP10AIReport:
+    maximums = (10, 8, 8, 8, 8, 8, 7, 5, 6, 8, 4, 5, 5, 4, 4, 2)
+    return PP10AIReport(
+        total_score=64,
+        grade="B",
+        confidence="LOW",
+        signal="TRUNG TÍNH",
+        risk="TRUNG BÌNH",
+        preliminary_conclusion="Đây là nhận định AI, chưa có dữ liệu live để xác nhận.",
+        criteria=[
+            PP10AICriterion(
+                criterion_id=index,
+                score=0,
+                status="AI_INFERENCE",
+                assessment="AI suy luận tham khảo.",
+                data_note="Không có dữ liệu live.",
+            )
+            for index, _ in enumerate(maximums, start=1)
+        ],
+        action_plan=[
+            PP10AIAction(
+                scenario="Kịch bản 1 (Tích cực)",
+                price_zone="Chưa xác định khi thiếu giá live",
+                strategy="Chờ người dùng cung cấp dữ liệu để xác nhận.",
+            ),
+            PP10AIAction(
+                scenario="Kịch bản 2 (Trung tính)",
+                price_zone="Chưa xác định khi thiếu giá live",
+                strategy="Theo dõi thêm dữ liệu.",
+            ),
+            PP10AIAction(
+                scenario="Kịch bản 3 (Tiêu cực)",
+                price_zone="Chưa xác định khi thiếu giá live",
+                strategy="Không kết luận định lượng.",
+            ),
+        ],
+        conclusion_action="CHỈ THAM KHẢO",
+        conclusion_reason="Cần dữ liệu thực tế để xác nhận.",
+        expectation="Chưa thể xác định mục tiêu giá.",
+        key_note="Không có dữ liệu thị trường live được truyền vào.",
+    )
+
+
+def test_gemini_builds_structured_ai_only_pp10_report() -> None:
+    models = FakeModels(SimpleNamespace(parsed=_ai_report().model_dump()))
+    explainer = GeminiExplainer(
+        api_key="test", model="test-model", client=SimpleNamespace(models=models)
+    )
+
+    result = explainer.generate_pp10_report(symbol="FPT", analysis_date="2026-09-04")
+
+    assert result.total_score == 64
+    config = models.calls[0]["config"]
+    assert config.response_schema["title"] == "PP10AIReport"
+    prompt = models.calls[0]["contents"]
+    assert "NO live market data" in prompt
+    assert "FPT" in prompt
 
 
 def test_invalid_gemini_response_is_recoverable() -> None:
