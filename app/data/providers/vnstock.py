@@ -1,7 +1,7 @@
-from collections.abc import Mapping
-from datetime import date, datetime
 import logging
-from typing import Any, Callable
+from collections.abc import Callable, Mapping
+from datetime import date, datetime
+from typing import Any
 
 from app.data.errors import NoMarketDataError, ProviderSchemaError
 from app.data.normalizer import normalize_index, normalize_ohlcv
@@ -69,6 +69,7 @@ class VnstockProvider(MarketDataProvider):
                 start=start.isoformat(),
                 end=end.isoformat(),
                 interval="1D",
+                count=400,
                 source=self.source,
             )
 
@@ -123,6 +124,7 @@ class VnstockProvider(MarketDataProvider):
                 start=start.isoformat(),
                 end=end.isoformat(),
                 interval="1D",
+                count=400,
                 source=self.source,
             )
 

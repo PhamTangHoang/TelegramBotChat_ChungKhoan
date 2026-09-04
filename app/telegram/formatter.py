@@ -32,6 +32,7 @@ def format_technical_report(
         f"Data: {data_freshness.value}",
         "",
         f"Price: {indicators.price}",
+        "Đơn vị giá: nghìn VND/cổ phiếu (22.25 = 22.250 VND)",
         "",
         "TREND",
         _reason_line(rule_result, "R1"),
@@ -86,6 +87,7 @@ def format_technical_report(
             [
                 "",
                 "POSITION PLAN",
+                "• Đơn vị các mức giá: nghìn VND/cổ phiếu",
                 f"• Vùng mua: {pp10.risk_plan.entry_zone}",
                 f"• Vùng gia tăng: {pp10.risk_plan.add_zone}",
                 f"• Stop-loss: {pp10.risk_plan.stop_loss}",

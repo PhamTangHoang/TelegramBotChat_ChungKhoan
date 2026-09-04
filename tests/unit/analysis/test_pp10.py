@@ -84,3 +84,10 @@ def test_pp10_scores_available_deterministic_criteria_and_keeps_unknowns_explici
     assert result.grade == "C"
     assert result.confidence == "Low"
     assert "Chưa xác định" in result.risk_plan.entry_zone
+
+
+def test_pp10_explains_which_long_ma_inputs_are_missing() -> None:
+    result = PP10Evaluator().evaluate(snapshot(ma150=None, ma200=None))
+
+    assert result.criteria[0].status == EvaluationStatus.DATA_UNAVAILABLE
+    assert result.criteria[0].reason == "Thiếu MA150, MA200; cần tối thiểu 200 phiên lịch sử."

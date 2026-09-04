@@ -114,6 +114,32 @@ class FakeListing:
         ]
 
 
+class CapturingClient(FakeClient):
+    def __init__(self) -> None:
+        self.equity_kwargs: dict[str, object] = {}
+        self.index_kwargs: dict[str, object] = {}
+
+    def equity(self, **_: object):
+        client = self
+
+        class CapturingEquity(FakeEquity):
+            def ohlcv(self, **kwargs: object):
+                client.equity_kwargs = kwargs
+                return super().ohlcv()
+
+        return CapturingEquity()
+
+    def index(self, **_: object):
+        client = self
+
+        class CapturingIndex(FakeIndex):
+            def ohlcv(self, **kwargs: object):
+                client.index_kwargs = kwargs
+                return super().ohlcv()
+
+        return CapturingIndex()
+
+
 def test_vnstock_provider_normalizes_equity_and_index() -> None:
     provider = VnstockProvider(client_factory=lambda: FakeClient())
 
@@ -148,6 +174,17 @@ def test_vnstock_provider_keeps_last_duplicate_equity_row_per_date() -> None:
     assert len(candles) == 1
     assert candles[0].open == 101
     assert candles[0].close == 106
+
+
+def test_vnstock_provider_requests_enough_history_for_long_moving_averages() -> None:
+    client = CapturingClient()
+    provider = VnstockProvider(client_factory=lambda: client)
+
+    provider.get_ohlcv("ACB", date(2025, 1, 1), date(2026, 9, 3))
+    provider.get_market_index("VNINDEX", date(2025, 1, 1), date(2026, 9, 3))
+
+    assert client.equity_kwargs["count"] >= 260
+    assert client.index_kwargs["count"] >= 260
 
 
 def test_vnstock_provider_classifies_empty_symbol_data() -> None:

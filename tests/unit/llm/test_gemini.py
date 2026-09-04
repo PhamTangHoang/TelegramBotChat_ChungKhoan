@@ -92,7 +92,7 @@ def test_gemini_client_uses_a_bounded_http_timeout() -> None:
         assert explainer.client is fake_client
 
     http_options = client_factory.call_args.kwargs["http_options"]
-    assert http_options.timeout == 8000
+    assert http_options.timeout == 10000
 
 
 def test_conflict_flag_does_not_change_primary_signal() -> None:

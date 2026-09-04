@@ -75,6 +75,7 @@ def test_report_contains_disclaimer_and_does_not_show_confidence_percentage() ->
     assert "không phải khuyến nghị đầu tư" in report
     assert "confidence_raw" not in report
     assert "100%" not in report
+    assert "Đơn vị giá: nghìn VND/cổ phiếu" in report
 
 
 def test_message_chunking_preserves_all_content_and_limit() -> None:

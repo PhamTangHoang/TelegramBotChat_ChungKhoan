@@ -28,6 +28,9 @@ the v1.5 business semantics.
   available. Criteria that require a market-universe RS ranking or sector
   valuation dataset remain explicitly `DATA_UNAVAILABLE` until those providers
   are added.
+- The vnstock adapter requests up to 400 daily rows for equity and index history
+  so MA150/MA200 and the PP10 structure checks are not starved by vnstock's
+  default 100-row response limit.
 - Telegram exposes one analysis command, `/analyze SYMBOL`, which combines the
   v1.5 technical rules with the deterministic PP10Ulti evaluator. `/news SYMBOL`
   is a separate cached RSS report and never changes the analysis score.

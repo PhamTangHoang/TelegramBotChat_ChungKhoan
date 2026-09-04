@@ -10,6 +10,7 @@ from app.llm.prompts import build_chat_prompt, build_prompt
 from app.llm.schemas import GeminiExplanation
 
 logger = logging.getLogger(__name__)
+_MIN_GEMINI_TIMEOUT_SECONDS = 10.0
 
 
 def _gemini_response_schema() -> dict[str, Any]:
@@ -49,7 +50,7 @@ class GeminiExplainer:
         self.model = model
         self._client = client
         self._api_key = api_key
-        self._timeout_ms = int(timeout_seconds * 1000)
+        self._timeout_ms = int(max(_MIN_GEMINI_TIMEOUT_SECONDS, timeout_seconds) * 1000)
 
     @property
     def client(self) -> Any:
