@@ -142,7 +142,7 @@ RSS là dữ liệu tổng hợp, bot không xác minh độc lập nội dung b
 | VOLUME_MIN_ELAPSED_MINUTES | 15 | Số phút tối thiểu trước khi đánh giá volume trong phiên. |
 | RS_LOOKBACK_DAYS | 20 | Khoảng nhìn lại cho relative performance. |
 | RULE_VERSION | 1.5.0 | Phiên bản Rule Engine. |
-| PP10_VERSION | 1.1.0 | Phiên bản bộ chấm PP10Ulti. |
+| PP10_VERSION | 2.0.0 | Phiên bản bộ chấm và format báo cáo PP10Ulti. |
 | PROMPT_VERSION | 1.2.0 | Phiên bản prompt Gemini. |
 | DATA_SCHEMA_VERSION | 1.0.0 | Phiên bản snapshot/audit. |
 | LOG_LEVEL | INFO | Mức log: DEBUG, INFO, WARNING, ERROR hoặc CRITICAL. |
@@ -184,17 +184,16 @@ thuật vẫn hoạt động.
 
 ## Nội dung báo cáo /analyze
 
-Một báo cáo gồm các phần chính:
+Một báo cáo PP10Ulti 2.0 gồm các phần chính:
 
-1. Price, trạng thái dữ liệu, phiên FINAL hoặc NOT FINAL.
-2. TREND: các rule về giá và MA20/MA50.
-3. MOMENTUM: RSI14, MACD Histogram và ATR14.
-4. VOLUME: volume ratio và thời gian đã trôi qua trong phiên.
-5. RELATIVE STRENGTH: relative performance so với VN-Index.
-6. RULE ENGINE: score, signal và risk chính thức.
-7. PP10ULTI: chấm từng tiêu chí, tổng điểm, grade, confidence và lý do thiếu dữ liệu.
-8. POSITION PLAN: vùng mua tham chiếu, vùng gia tăng, stop-loss, mục tiêu và R:R.
-9. GEMINI ANALYSIS: chỉ xuất hiện khi Gemini trả về hợp lệ.
+1. Giá tham chiếu, ngày cập nhật, trạng thái phiên và độ mới dữ liệu.
+2. Tổng điểm, độ phủ dữ liệu, xếp hạng, mức độ tin cậy và kết luận sơ bộ.
+3. Chi tiết từng tiêu chí theo nhóm kỹ thuật, dòng tiền, động lượng, cơ bản,
+   định giá/vĩ mô và quản trị vị thế.
+4. Kế hoạch hành động tham khảo với ba kịch bản, vùng giá, stop-loss, mục tiêu
+   và R:R.
+5. Kết luận kỹ thuật; phần giải thích Gemini chỉ xuất hiện khi Gemini trả về
+   hợp lệ.
 
 ### PP10Ulti
 
@@ -203,7 +202,7 @@ quality, volume, VPVR xấp xỉ, CPR, OBV/CMF, MACD, RSI/ADX, Stochastic RSI,
 fundamental, valuation, thị trường chung và quản trị vị thế.
 
 Tiêu chí chỉ được cộng vào mẫu số khi dữ liệu đã đủ. Những phần chưa có nguồn
-đáng tin cậy sẽ hiện DATA_UNAVAILABLE, không bị đoán giả và không làm sai điểm.
+đáng tin cậy sẽ hiện “chưa có dữ liệu”, không bị đoán giả và không làm sai điểm.
 Đặc biệt, RS Rating toàn universe và so sánh P/E/P/B ngành/lịch sử cần provider
 chuyên biệt; hiện có thể chưa đánh giá được.
 

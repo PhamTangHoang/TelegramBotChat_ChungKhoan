@@ -13,6 +13,138 @@ DISCLAIMER = (
     "Score không phải xác suất dự đoán."
 )
 
+_PP10_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("NHÓM KỸ THUẬT", ("1", "2", "3", "4")),
+    ("NHÓM DÒNG TIỀN", ("5", "6", "7", "8", "9")),
+    ("NHÓM ĐỘNG LƯỢNG", ("10", "11", "12")),
+    ("NHÓM CƠ BẢN", ("13",)),
+    ("NHÓM ĐỊNH GIÁ & VĨ MÔ", ("14", "15")),
+    ("NHÓM QUẢN TRỊ VỊ THẾ", ("16",)),
+)
+
+
+def _analysis_kind_label(analysis_kind: AnalysisKind, is_final: bool) -> str:
+    if is_final or analysis_kind == AnalysisKind.FINAL:
+        return "Cuối phiên"
+    return "Trong phiên"
+
+
+def _data_freshness_label(data_freshness: DataFreshness) -> str:
+    if data_freshness == DataFreshness.STALE_CACHE:
+        return "Cache cũ — cần thận trọng"
+    return "Dữ liệu mới"
+
+
+def _signal_label(signal: Signal) -> str:
+    return {
+        Signal.BULLISH: "TÍCH CỰC",
+        Signal.NEUTRAL: "TRUNG TÍNH",
+        Signal.BEARISH: "TIÊU CỰC",
+        Signal.INSUFFICIENT_DATA: "CHƯA ĐỦ DỮ LIỆU",
+    }.get(signal, str(signal))
+
+
+def _risk_label(risk: Any) -> str:
+    return {
+        "LOW": "THẤP",
+        "MEDIUM": "TRUNG BÌNH",
+        "HIGH": "CAO",
+    }.get(getattr(risk, "value", risk), str(risk))
+
+
+def _confidence_label(confidence: str) -> str:
+    return {"High": "Cao", "Medium": "Trung bình", "Low": "Thấp"}.get(
+        confidence, confidence
+    )
+
+
+def _grade_stars(grade: str) -> str:
+    return {"A+": "⭐⭐⭐⭐⭐", "A": "⭐⭐⭐⭐", "B": "⭐⭐⭐", "C": "⭐⭐"}.get(
+        grade, ""
+    )
+
+
+def _criterion_status(status: EvaluationStatus) -> str:
+    return {
+        EvaluationStatus.PASS: "✅ ĐẠT",
+        EvaluationStatus.FAIL: "❌ CHƯA ĐẠT",
+        EvaluationStatus.NOT_EVALUATED: "⚠️ CHƯA ĐÁNH GIÁ",
+        EvaluationStatus.DATA_UNAVAILABLE: "⚠️ CHƯA CÓ DỮ LIỆU",
+    }.get(status, str(status))
+
+
+def _criterion_score(criterion: Any) -> str:
+    if criterion.status in {EvaluationStatus.PASS, EvaluationStatus.FAIL}:
+        return f"{criterion.score}/1"
+    return "—"
+
+
+def _pp10_conclusion(pp10: Any, rule_result: Any) -> str:
+    evaluated = [
+        criterion
+        for criterion in pp10.criteria
+        if criterion.status in {EvaluationStatus.PASS, EvaluationStatus.FAIL}
+    ]
+    passed = [
+        criterion.name for criterion in evaluated if criterion.status == EvaluationStatus.PASS
+    ]
+    failed = [
+        criterion.name for criterion in evaluated if criterion.status == EvaluationStatus.FAIL
+    ]
+    unavailable = [
+        criterion.name
+        for criterion in pp10.criteria
+        if criterion.status in {EvaluationStatus.DATA_UNAVAILABLE, EvaluationStatus.NOT_EVALUATED}
+    ]
+
+    if not evaluated:
+        conclusion = (
+            "Chưa thể kết luận xu hướng theo PP10Ulti vì hiện chưa có đủ dữ liệu "
+            "để chấm các tiêu chí."
+        )
+    elif rule_result.signal == Signal.BULLISH:
+        conclusion = "Tín hiệu định lượng đang nghiêng về chiều tích cực theo dữ liệu hiện có."
+    elif rule_result.signal == Signal.BEARISH:
+        conclusion = "Tín hiệu định lượng đang nghiêng về chiều tiêu cực theo dữ liệu hiện có."
+    elif rule_result.signal == Signal.NEUTRAL:
+        conclusion = "Tín hiệu định lượng chưa xác nhận một xu hướng rõ ràng."
+    else:
+        conclusion = "Chưa đủ dữ liệu bắt buộc để đưa ra kết luận định lượng."
+
+    details: list[str] = []
+    if passed:
+        details.append(f"Điểm tích cực: {', '.join(passed[:3])}.")
+    if failed:
+        details.append(f"Điểm cần theo dõi: {', '.join(failed[:3])}.")
+    if unavailable:
+        details.append(f"Còn thiếu: {', '.join(unavailable[:3])}.")
+    return " ".join([conclusion, *details])
+
+
+def _pp10_action_plan(pp10: Any) -> list[str]:
+    risk_plan = pp10.risk_plan
+    return [
+        "3. KẾ HOẠCH HÀNH ĐỘNG THAM KHẢO",
+        "Kịch bản | Vùng giá | Chiến lược",
+        (
+            "Kịch bản 1 (Tích cực) | "
+            f"{risk_plan.add_zone} | Chỉ cân nhắc gia tăng khi breakout được xác nhận."
+        ),
+        (
+            "Kịch bản 2 (Trung tính) | "
+            f"{risk_plan.entry_zone} | Theo dõi phản ứng giá trong vùng tham chiếu."
+        ),
+        (
+            "Kịch bản 3 (Tiêu cực) | "
+            f"{risk_plan.stop_loss} | Dừng mua mới và đánh giá lại cấu trúc."
+        ),
+        "",
+        "Quản trị vị thế:",
+        f"• Stop-loss tham chiếu: {risk_plan.stop_loss}",
+        f"• Mục tiêu tham chiếu: {risk_plan.target}",
+        f"• Risk/Reward tham chiếu: {risk_plan.risk_reward}",
+    ]
+
 
 def format_technical_report(
     *,
@@ -26,89 +158,107 @@ def format_technical_report(
     gemini: Any | None = None,
     pp10: Any | None = None,
 ) -> str:
-    lines = [
-        f"{symbol.upper()} — Technical Analysis",
-        f"Tính đến: {as_of.isoformat()}",
-        f"Status: {analysis_kind.value} / {'FINAL' if is_final else 'NOT FINAL'}",
-        f"Data: {data_freshness.value}",
-        "",
-        f"Price: {_price_per_share(indicators.price)}",
-        "Đơn vị giá: VND/cổ phiếu (đã quy đổi từ dữ liệu nghìn VND của vnstock)",
-        "",
-        "TREND",
-        _reason_line(rule_result, "R1"),
-        _reason_line(rule_result, "R2"),
-        _reason_line(rule_result, "R3"),
-        "",
-        "MOMENTUM",
-        f"• RSI14: {_number(indicators.rsi14)}",
-        f"• MACD Histogram: {_number(indicators.macd_histogram)}",
-        f"• ATR14: {_price_per_share(indicators.atr14)}",
-        "",
-        "VOLUME",
-        f"• Volume Ratio (projected): {_number(indicators.volume_ratio_projected)}",
-        f"• Regular trading time elapsed: {indicators.elapsed_trading_minutes} min",
-        "",
-        "RELATIVE STRENGTH",
-        f"• Relative performance vs VNINDEX: {_number(indicators.relative_return)}",
-        "",
-        "RULE ENGINE",
-        f"Score: {rule_result.score}/{rule_result.max_score}",
-        f"Signal: {rule_result.signal.value}",
-        f"Risk: {rule_result.risk.value}",
-    ]
+    if pp10 is None:
+        lines = [
+            f"BÁO CÁO PHÂN TÍCH — {symbol.upper()}",
+            f"Giá tham chiếu: {_price_per_share(indicators.price)}",
+            f"Ngày: {as_of.strftime('%d/%m/%Y')}",
+            "Đơn vị giá: VND/cổ phiếu (vnstock trả dữ liệu theo nghìn VND)",
+            (
+                f"Tín hiệu kỹ thuật: {_signal_label(rule_result.signal)} | "
+                f"Rủi ro: {_risk_label(rule_result.risk)}"
+            ),
+        ]
+    else:
+        criteria_by_id = {criterion.criterion_id: criterion for criterion in pp10.criteria}
+        total_criteria = getattr(pp10, "total_criteria", 16)
+        lines = [
+            f"BÁO CÁO PP10ULTI 2.0 – {symbol.upper()}",
+            (
+                f"Giá tham chiếu: {_price_per_share(indicators.price)} | "
+                f"Ngày: {as_of.strftime('%d/%m/%Y')}"
+            ),
+            (
+                f"Kỳ phân tích: {_analysis_kind_label(analysis_kind, is_final)} | "
+                f"Trạng thái dữ liệu: {_data_freshness_label(data_freshness)}"
+            ),
+            "Đơn vị giá: VND/cổ phiếu (vnstock trả dữ liệu theo nghìn VND)",
+            "",
+            "1. TỔNG ĐIỂM PP10ULTI 2.0",
+            (
+                f"Tổng điểm: {pp10.score}/{pp10.max_score} tiêu chí có dữ liệu"
+                if pp10.max_score
+                else "Tổng điểm: chưa chấm được tiêu chí nào"
+            ),
+            f"Độ phủ dữ liệu: {pp10.evaluated_count}/{total_criteria} tiêu chí",
+            f"Xếp hạng: {_grade_stars(pp10.grade)} {pp10.grade}",
+            f"Mức độ tin cậy: {_confidence_label(pp10.confidence)} (không phải xác suất)",
+            (
+                f"Tín hiệu kỹ thuật: {_signal_label(rule_result.signal)} | "
+                f"Rủi ro: {_risk_label(rule_result.risk)}"
+            ),
+            f"Kết luận sơ bộ: {_pp10_conclusion(pp10, rule_result)}",
+            "",
+            "2. CHI TIẾT CÁC HẠNG MỤC",
+            "Hạng mục | Điểm | Nhận xét chi tiết",
+        ]
+
+        for group_name, criterion_ids in _PP10_GROUPS:
+            lines.extend(["", group_name])
+            for criterion_id in criterion_ids:
+                criterion = criteria_by_id.get(criterion_id)
+                if criterion is None:
+                    continue
+                lines.append(
+                    f"{criterion.criterion_id}. {criterion.name} | "
+                    f"{_criterion_score(criterion)} | {_criterion_status(criterion.status)}"
+                )
+                lines.append(f"   Nhận xét: {criterion.reason}")
+                value = getattr(criterion, "value", None)
+                if value is not None:
+                    lines.append(
+                        f"   Dữ liệu: {_format_criterion_value(criterion.criterion_id, value)}"
+                    )
+                if criterion.status in {
+                    EvaluationStatus.DATA_UNAVAILABLE,
+                    EvaluationStatus.NOT_EVALUATED,
+                }:
+                    lines.append(f"   Điều kiện cần: {criterion.threshold}")
+
+        lines.extend(_pp10_action_plan(pp10))
+        lines.extend(
+            [
+                "",
+                "🔔 KẾT LUẬN",
+                (
+                    f"Trạng thái kỹ thuật: {_signal_label(rule_result.signal)} — "
+                    f"xếp hạng PP10Ulti {pp10.grade}."
+                ),
+                (
+                    "Hành động tham khảo: theo dõi điều kiện xác nhận trong kế hoạch; "
+                    "không xem đây là khuyến nghị mua/bán cá nhân."
+                ),
+            ]
+        )
 
     if rule_result.signal == Signal.INSUFFICIENT_DATA:
         lines.append("⚠️ Chưa đủ dữ liệu bắt buộc; không tạo signal giả.")
     if any(reason.status == RuleStatus.NOT_EVALUATED for reason in rule_result.reasons):
-        lines.append("⚠️ R6 chưa đánh giá vì chưa đủ 15 phút giao dịch.")
-
-    if pp10 is not None:
-        lines.extend(
-            [
-                "",
-                "PP10ULTI",
-                f"Score: {pp10.score}/{pp10.max_score} "
-                f"(đánh giá được {pp10.evaluated_count}/16 tiêu chí)",
-                f"Grade: {pp10.grade}",
-                f"Confidence: {pp10.confidence} (không phải xác suất)",
-            ]
-        )
-        for criterion in pp10.criteria:
-            lines.append(
-                f"{criterion.criterion_id}. {_status_icon(criterion.status)} "
-                f"{criterion.name}: {criterion.status.value} — {criterion.reason}"
-            )
-            value = getattr(criterion, "value", None)
-            if value is not None:
-                lines.append(
-                    f"   Value: {_format_criterion_value(criterion.criterion_id, value)}"
-                )
-            lines.append(f"   Threshold: {criterion.threshold}")
-            lines.append(f"   Source: {criterion.data_source}")
-        lines.extend(
-            [
-                "",
-                "POSITION PLAN",
-                "• Đơn vị các mức giá: VND/cổ phiếu",
-                f"• Vùng mua: {pp10.risk_plan.entry_zone}",
-                f"• Vùng gia tăng: {pp10.risk_plan.add_zone}",
-                f"• Stop-loss: {pp10.risk_plan.stop_loss}",
-                f"• Mục tiêu: {pp10.risk_plan.target}",
-                f"• Risk/Reward: {pp10.risk_plan.risk_reward}",
-            ]
+        lines.append(
+            "⚠️ Một số tiêu chí trong phiên chưa được đánh giá vì "
+            "chưa đủ thời gian giao dịch."
         )
 
     if gemini is not None:
         lines.extend(
             [
                 "",
-                "GEMINI ANALYSIS",
-                f"Technical Summary: {gemini.technical_explanation}",
-                f"Bull Case: {gemini.bull_case}",
-                f"Bear Case: {gemini.bear_case}",
-                f"Risk: {gemini.risk}",
-                f"Conclusion: {gemini.conclusion}",
+                "GIẢI THÍCH GEMINI",
+                f"• Tóm tắt kỹ thuật: {gemini.technical_explanation}",
+                f"• Kịch bản tích cực: {gemini.bull_case}",
+                f"• Kịch bản tiêu cực: {gemini.bear_case}",
+                f"• Rủi ro: {gemini.risk}",
+                f"• Kết luận: {gemini.conclusion}",
             ]
         )
 

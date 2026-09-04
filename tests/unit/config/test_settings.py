@@ -49,7 +49,7 @@ def test_settings_supports_public_telegram_access() -> None:
 def test_settings_exposes_pp10_version() -> None:
     settings = Settings(database_url="sqlite+pysqlite:///:memory:", _env_file=None)
 
-    assert settings.pp10_version == "1.1.0"
+    assert settings.pp10_version == "2.0.0"
 
 
 def test_settings_defaults_to_supported_low_latency_gemini_model() -> None:

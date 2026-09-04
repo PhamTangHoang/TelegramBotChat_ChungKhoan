@@ -34,7 +34,7 @@ _CRITERIA = (
 class PP10Evaluator:
     """Deterministic PP10 score using only validated data available to the bot."""
 
-    def __init__(self, *, version: str = "1.0.0") -> None:
+    def __init__(self, *, version: str = "2.0.0") -> None:
         self.version = version
 
     def evaluate(self, indicators: IndicatorSnapshot) -> PP10Result:

@@ -88,7 +88,7 @@ class MarketAnalysisService:
             volume_min_elapsed_minutes=settings.volume_min_elapsed_minutes,
         )
         self.pp10_evaluator = pp10_evaluator or PP10Evaluator(
-            version=getattr(settings, "pp10_version", "1.0.0")
+            version=getattr(settings, "pp10_version", "2.0.0")
         )
         self.fundamental_provider = fundamental_provider
         self.gemini = gemini

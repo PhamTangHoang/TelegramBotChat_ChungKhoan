@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from app.analysis.pp10 import PP10Evaluator
 from app.domain.enums import AnalysisKind, DataFreshness, EvaluationStatus, Risk, RuleStatus, Signal
 from app.domain.schemas import IndicatorSnapshot, RuleReason, RuleResult
 from app.telegram.access_control import AccessDenied, RateLimiter, WhitelistAccessController
@@ -75,7 +76,7 @@ def test_report_contains_disclaimer_and_does_not_show_confidence_percentage() ->
     assert "không phải khuyến nghị đầu tư" in report
     assert "confidence_raw" not in report
     assert "100%" not in report
-    assert "Price: 110.000 VND/cổ phiếu" in report
+    assert "Giá tham chiếu: 110.000 VND/cổ phiếu" in report
     assert "Đơn vị giá: VND/cổ phiếu" in report
 
 
@@ -117,9 +118,8 @@ def test_report_formats_stock_price_indicators_as_vnd() -> None:
         data_freshness=DataFreshness.FRESH,
     )
 
-    assert "Price: 22.250 VND/cổ phiếu" in report
-    assert "• ATR14: 1.250 VND/cổ phiếu" in report
-    assert "\nPrice: 22.25\n" not in report
+    assert "Giá tham chiếu: 22.250 VND/cổ phiếu" in report
+    assert "\nGiá tham chiếu: 22.25\n" not in report
 
 
 def test_message_chunking_preserves_all_content_and_limit() -> None:
@@ -258,12 +258,60 @@ def test_unified_analysis_report_includes_pp10_score_and_data_gaps() -> None:
     )
 
     assert "PP10ULTI" in report
-    assert "Score: 1/1" in report
-    assert "DATA_UNAVAILABLE" in report
+    assert "Tổng điểm: 1/1 tiêu chí có dữ liệu" in report
+    assert "CHƯA CÓ DỮ LIỆU" in report
     assert "Price > MA20 > MA200" in report
     assert (
-        "Value: price: 22.250 VND/cổ phiếu, ma20: 21.500 VND/cổ phiếu, "
+        "Dữ liệu: price: 22.250 VND/cổ phiếu, ma20: 21.500 VND/cổ phiếu, "
         "ma50: 20.000 VND/cổ phiếu"
     ) in report
-    assert "not_available" in report
-    assert "POSITION PLAN" in report
+    assert "3. KẾ HOẠCH HÀNH ĐỘNG THAM KHẢO" in report
+    assert "POSITION PLAN" not in report
+
+
+def test_pp10_report_uses_structured_vietnamese_summary_and_action_plan() -> None:
+    indicators = IndicatorSnapshot(
+        price=Decimal("22.25"),
+        elapsed_trading_minutes=60,
+        as_of=datetime(2026, 9, 3, 3),
+        is_final=False,
+    )
+    pp10 = PP10Evaluator(version="2.0.0").evaluate(indicators)
+    rule_result = RuleResult(
+        score=0,
+        max_score=0,
+        signal=Signal.INSUFFICIENT_DATA,
+        confidence_raw=None,
+        reasons=[],
+        risk=Risk.LOW,
+        risk_points=0,
+        risk_reasons=[],
+        rule_version="1.5.0",
+    )
+
+    report = format_technical_report(
+        symbol="acb",
+        as_of=indicators.as_of,
+        analysis_kind=AnalysisKind.INTRADAY,
+        is_final=False,
+        indicators=indicators,
+        rule_result=rule_result,
+        data_freshness=DataFreshness.FRESH,
+        pp10=pp10,
+    )
+
+    assert "BÁO CÁO PP10ULTI 2.0 – ACB" in report
+    assert "1. TỔNG ĐIỂM PP10ULTI 2.0" in report
+    assert "Độ phủ dữ liệu: 0/16 tiêu chí" in report
+    assert "2. CHI TIẾT CÁC HẠNG MỤC" in report
+    assert "NHÓM KỸ THUẬT" in report
+    assert "NHÓM DÒNG TIỀN" in report
+    assert "NHÓM ĐỘNG LƯỢNG" in report
+    assert "NHÓM CƠ BẢN" in report
+    assert "NHÓM ĐỊNH GIÁ & VĨ MÔ" in report
+    assert "NHÓM QUẢN TRỊ VỊ THẾ" in report
+    assert "3. KẾ HOẠCH HÀNH ĐỘNG" in report
+    assert "Kịch bản 1 (Tích cực)" in report
+    assert "🔔 KẾT LUẬN" in report
+    assert "POSITION PLAN" not in report
+    assert "GEMINI ANALYSIS" not in report
