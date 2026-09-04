@@ -3,14 +3,21 @@ from __future__ import annotations
 import json
 import logging
 from copy import deepcopy
+from time import perf_counter
 from typing import Any
 
 from app.domain.enums import Signal
-from app.llm.prompts import build_chat_prompt, build_pp10_prompt, build_prompt
+from app.llm.prompts import (
+    build_chat_prompt,
+    build_pp10_prompt,
+    build_pp10_repair_prompt,
+    build_prompt,
+)
 from app.llm.schemas import GeminiExplanation, PP10AIReport
 
 logger = logging.getLogger(__name__)
 _MIN_GEMINI_TIMEOUT_SECONDS = 10.0
+_PP10_MAX_OUTPUT_TOKENS = 6000
 
 
 def _gemini_response_schema() -> dict[str, Any]:
@@ -127,8 +134,41 @@ class GeminiExplainer:
             debate_drafts=debate_drafts,
         )
         try:
-            from google.genai import types
+            response = self._generate_pp10_response(prompt)
+        except Exception as exc:  # network/API failures must be recoverable by the caller
+            logger.warning("Gemini PP10 report failed", exc_info=True)
+            raise GeminiError("Gemini PP10 report request failed") from exc
 
+        try:
+            return _parse_pp10_response(response)
+        except Exception as exc:
+            validation_error = str(exc)
+            logger.warning(
+                "Gemini returned invalid PP10 report; requesting one repair",
+                exc_info=True,
+            )
+
+        repair_prompt = build_pp10_repair_prompt(
+            original_prompt=prompt,
+            validation_error=validation_error,
+        )
+        try:
+            repaired_response = self._generate_pp10_response(repair_prompt)
+        except Exception as repair_exc:
+            logger.warning("Gemini PP10 repair request failed", exc_info=True)
+            raise GeminiError("Gemini PP10 repair request failed") from repair_exc
+        try:
+            return _parse_pp10_response(repaired_response)
+        except Exception as repair_exc:
+            logger.warning("Gemini repaired PP10 report is still invalid", exc_info=True)
+            raise GeminiError("Gemini PP10 report failed schema validation") from repair_exc
+
+    def _generate_pp10_response(self, prompt: str) -> Any:
+        from google.genai import types
+
+        started_at = perf_counter()
+        logger.info("Gemini PP10 request started model=%s", self.model)
+        try:
             response = self.client.models.generate_content(
                 model=self.model,
                 contents=prompt,
@@ -136,23 +176,23 @@ class GeminiExplainer:
                     response_mime_type="application/json",
                     response_schema=_pp10_response_schema(),
                     temperature=0.2,
+                    max_output_tokens=_PP10_MAX_OUTPUT_TOKENS,
                 ),
             )
-        except Exception as exc:  # network/API failures must be recoverable by the caller
-            logger.warning("Gemini PP10 report failed", exc_info=True)
-            raise GeminiError("Gemini PP10 report request failed") from exc
-
-        try:
-            parsed = getattr(response, "parsed", None)
-            if parsed is not None:
-                return PP10AIReport.model_validate(parsed)
-            text = getattr(response, "text", None)
-            if not isinstance(text, str) or not text.strip():
-                raise ValueError("Gemini returned no PP10 report")
-            return _parse_pp10_report_text(text)
-        except Exception as exc:
-            logger.warning("Gemini returned invalid PP10 report", exc_info=True)
-            raise GeminiError("Gemini PP10 report failed schema validation") from exc
+        except Exception:
+            logger.warning(
+                "Gemini PP10 request failed model=%s duration_ms=%.1f",
+                self.model,
+                (perf_counter() - started_at) * 1000,
+                exc_info=True,
+            )
+            raise
+        logger.info(
+            "Gemini PP10 request completed model=%s duration_ms=%.1f",
+            self.model,
+            (perf_counter() - started_at) * 1000,
+        )
+        return response
 
     def chat(self, message: str) -> str:
         prompt = build_chat_prompt(message)
@@ -206,6 +246,16 @@ def _parse_pp10_report_text(text: str) -> PP10AIReport:
         raise ValueError("Gemini PP10 response does not contain a JSON object")
     payload, _ = json.JSONDecoder().raw_decode(candidate[start:])
     return PP10AIReport.model_validate(payload)
+
+
+def _parse_pp10_response(response: Any) -> PP10AIReport:
+    parsed = getattr(response, "parsed", None)
+    if parsed is not None:
+        return PP10AIReport.model_validate(parsed)
+    text = getattr(response, "text", None)
+    if not isinstance(text, str) or not text.strip():
+        raise ValueError("Gemini returned no PP10 report")
+    return _parse_pp10_report_text(text)
 
 
 def explanation_conflicts_with_signal(explanation: GeminiExplanation, signal: Signal) -> bool:

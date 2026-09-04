@@ -6,13 +6,16 @@ from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
 from dataclasses import dataclass
+from time import perf_counter
 from typing import Any
 
 import httpx
 
+from app.llm.gemini import GeminiError
 from app.llm.prompts import (
     build_openrouter_analyst_prompt,
     build_openrouter_judge_prompt,
+    build_pp10_repair_prompt,
 )
 from app.llm.schemas import PP10AIReport
 
@@ -94,12 +97,30 @@ class OpenRouterClient:
             "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",
         }
+        started_at = perf_counter()
+        logger.info("OpenRouter request started model=%s max_tokens=%s", model, max_tokens)
         try:
             response = self._requester(url=self._endpoint, headers=headers, json=payload)
         except httpx.HTTPError as exc:
+            logger.warning(
+                "OpenRouter request transport failed model=%s duration_ms=%.1f",
+                model,
+                (perf_counter() - started_at) * 1000,
+                exc_info=True,
+            )
             raise OpenRouterError("OpenRouter request failed") from exc
+        logger.info(
+            "OpenRouter request completed model=%s status=%s duration_ms=%.1f",
+            model,
+            response.status_code,
+            (perf_counter() - started_at) * 1000,
+        )
         if response.status_code >= 400:
-            raise OpenRouterError(f"OpenRouter request failed with HTTP {response.status_code}")
+            detail = _response_error_detail(response)
+            suffix = f": {detail}" if detail else ""
+            raise OpenRouterError(
+                f"OpenRouter request failed with HTTP {response.status_code}{suffix}"
+            )
 
         try:
             body = response.json()
@@ -109,7 +130,7 @@ class OpenRouterClient:
             if not content:
                 raise ValueError("response content is empty")
         except (KeyError, IndexError, TypeError, ValueError) as exc:
-            raise OpenRouterError("OpenRouter returned an invalid response") from exc
+            raise OpenRouterError(f"OpenRouter returned an invalid response: {exc}") from exc
         return OpenRouterCompletion(content=content, model=body.get("model"))
 
 
@@ -234,8 +255,36 @@ class OpenRouterDebateExplainer:
         try:
             return _parse_pp10_report_text(completion.content)
         except Exception as exc:
-            logger.warning("OpenRouter judge returned invalid PP10 report", exc_info=True)
-            raise OpenRouterError("OpenRouter judge response failed schema validation") from exc
+            logger.warning(
+                "OpenRouter judge returned invalid PP10 report; requesting one repair",
+                exc_info=True,
+            )
+            try:
+                repaired = self.client.complete(
+                    model=self.judge_model,
+                    fallback_models=self.fallback_models,
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": build_pp10_repair_prompt(
+                                original_prompt=judge_prompt,
+                                validation_error=str(exc),
+                            ),
+                        }
+                    ],
+                    max_tokens=4000,
+                    response_format=_pp10_response_format(),
+                )
+                return _parse_pp10_report_text(repaired.content)
+            except Exception as repair_exc:
+                logger.warning("OpenRouter repaired judge report is still invalid", exc_info=True)
+                if isinstance(repair_exc, OpenRouterError):
+                    raise OpenRouterError(
+                        f"OpenRouter judge repair failed: {repair_exc}"
+                    ) from repair_exc
+                raise OpenRouterError(
+                    "OpenRouter judge response failed schema validation"
+                ) from repair_exc
 
     def _run_analyst(
         self,
@@ -278,11 +327,11 @@ class HybridReportGenerator:
     def generate_pp10_report(self, **kwargs: Any) -> PP10AIReport:
         try:
             return self.primary.generate_pp10_report(**kwargs)
-        except OpenRouterError:
+        except (OpenRouterError, GeminiError):
             if self.fallback is None:
                 raise
             logger.warning(
-                "Primary OpenRouter report failed; using fallback generator",
+                "Primary debate report failed; using fallback generator",
                 exc_info=True,
             )
             return self.fallback.generate_pp10_report(**kwargs)
@@ -311,6 +360,31 @@ def _message_content(value: Any) -> str:
         ]
         return "".join(parts).strip()
     return ""
+
+
+def _response_error_detail(response: httpx.Response) -> str:
+    """Extract a short provider error without echoing request credentials."""
+    detail = ""
+    try:
+        body = response.json()
+    except ValueError:
+        body = None
+    if isinstance(body, dict):
+        error = body.get("error")
+        if isinstance(error, dict):
+            message = error.get("message")
+            code = error.get("code")
+            if isinstance(message, str):
+                detail = message.strip()
+            if code and str(code) not in detail:
+                detail = f"{detail} (code {code})".strip()
+        elif isinstance(error, str):
+            detail = error.strip()
+        elif isinstance(body.get("message"), str):
+            detail = body["message"].strip()
+    if not detail:
+        detail = response.text.strip()
+    return " ".join(detail.split())[:400]
 
 
 def _parse_pp10_report_text(text: str) -> PP10AIReport:

@@ -22,8 +22,8 @@ TELEGRAM_COMMANDS: tuple[CommandSpec, ...] = (
 HELP_TEXT = """VN Stock Analyst Bot hỗ trợ:
 
 /analyze FPT
-AI tạo báo cáo PP10Ulti 2.0 của FPT theo prompt mẫu. Khi dùng hybrid, OpenRouter
-đóng vai trò analyst và Gemini làm Judge tổng hợp.
+Lấy OHLCV cơ bản của FPT rồi AI tạo báo cáo PP10Ulti 2.0. Khi dùng hybrid,
+OpenRouter đóng vai trò analyst và Gemini làm Judge tổng hợp.
 
 /chart FPT
 Xem biểu đồ kỹ thuật của FPT.

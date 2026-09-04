@@ -54,6 +54,9 @@ missing merely because no separate indicator provider was used.
 Return exactly one JSON object matching the requested schema. Include all 16
 criteria in order, using these fixed maximum points:
 1=10, 2=8, 3=8, 4=8, 5=8, 6=8, 7=7, 8=5, 9=6, 10=8, 11=4, 12=5, 13=5, 14=4, 15=4, 16=2.
+These are hard limits, not suggestions: never assign a score above the listed
+maximum for any criterion. Before returning JSON, check every criterion score
+against this table and check that all 16 criterion IDs are present exactly once.
 The total is 100 points. `total_score` is only an AI-generated reference score and
 must be stated as such by the surrounding application.
 
@@ -193,5 +196,22 @@ def build_openrouter_judge_prompt(
             "Debate Drafts:\n" + canonical_json(drafts),
             "Chỉ trả về đúng một JSON object theo schema PP10AIReport, không Markdown và không "
             "thêm trường ngoài schema.",
+        )
+    )
+
+
+def build_pp10_repair_prompt(*, original_prompt: str, validation_error: str) -> str:
+    """Ask a provider to regenerate a complete report after local validation fails."""
+    return "\n".join(
+        (
+            original_prompt,
+            "\nREPAIR REQUIRED:",
+            "Báo cáo JSON trước đó không vượt qua kiểm tra cục bộ. Hãy tạo lại TOÀN BỘ "
+            "JSON object theo đúng schema; không trả về bản vá một phần, không Markdown.",
+            "Lỗi kiểm tra: " + validation_error[:800],
+            "Nhắc lại giới hạn điểm bắt buộc: "
+            "1=10, 2=8, 3=8, 4=8, 5=8, 6=8, 7=7, 8=5, 9=6, 10=8, "
+            "11=4, 12=5, 13=5, 14=4, 15=4, 16=2.",
+            "Tự kiểm tra đủ 16 criterion_id theo thứ tự 1 đến 16 trước khi trả lời.",
         )
     )

@@ -106,6 +106,16 @@ class EmptyEquityClient(FakeClient):
         return EmptyEquity()
 
 
+class InvalidSymbolEquity(FakeEquity):
+    def ohlcv(self, **_: object):
+        raise ValueError("Invalid symbol. Your symbol format is not recognized!")
+
+
+class InvalidSymbolClient(FakeClient):
+    def equity(self, **_: object):
+        return InvalidSymbolEquity()
+
+
 class FakeListing:
     def symbols_by_exchange(self, **_: object):
         return [
@@ -194,6 +204,13 @@ def test_vnstock_provider_classifies_empty_symbol_data() -> None:
         provider.get_ohlcv("FEE", date(2026, 9, 1), date(2026, 9, 3))
 
 
+def test_vnstock_provider_classifies_invalid_symbol_data() -> None:
+    provider = VnstockProvider(client_factory=lambda: InvalidSymbolClient())
+
+    with pytest.raises(NoMarketDataError, match="BAD"):
+        provider.get_ohlcv("BAD", date(2026, 9, 1), date(2026, 9, 3))
+
+
 def test_vnstock_provider_resolves_exchange_for_on_demand_symbol() -> None:
     provider = VnstockProvider(
         client_factory=lambda: FakeClient(),
@@ -203,3 +220,14 @@ def test_vnstock_provider_resolves_exchange_for_on_demand_symbol() -> None:
     assert provider.resolve_exchange("ACB") == "HNX"
     assert provider.resolve_exchange("FPT") == "HOSE"
     assert provider.resolve_exchange("UNKNOWN") is None
+
+
+def test_vnstock_provider_rejects_unknown_symbol_after_listing_preflight() -> None:
+    provider = VnstockProvider(
+        client_factory=lambda: InvalidSymbolClient(),
+        listing_factory=lambda **_: FakeListing(),
+    )
+    provider.resolve_exchange("UNKNOWN")
+
+    with pytest.raises(NoMarketDataError, match="UNKNOWN"):
+        provider.get_ohlcv("UNKNOWN", date(2026, 9, 1), date(2026, 9, 3))

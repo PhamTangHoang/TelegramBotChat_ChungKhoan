@@ -63,6 +63,10 @@ class VnstockProvider(MarketDataProvider):
         exchange: str = "HOSE",
         is_final: bool = False,
     ):
+        normalized_symbol = symbol.strip().upper()
+        if self._listing_loaded and normalized_symbol not in self._exchange_cache:
+            raise NoMarketDataError(f"No market data for {normalized_symbol}")
+
         def operation() -> Any:
             client = self._client_factory()
             return client.equity(symbol=symbol).ohlcv(
@@ -190,7 +194,13 @@ def _contains_no_data_error(error: BaseException) -> bool:
             continue
         seen.add(id(current))
         message = str(current).lower()
-        if "dữ liệu trống" in message or "no data" in message or "empty data" in message:
+        if (
+            "dữ liệu trống" in message
+            or "no data" in message
+            or "empty data" in message
+            or "invalid symbol" in message
+            or "format is not recognized" in message
+        ):
             return True
         cause = current.__cause__ or current.__context__
         if cause is not None:

@@ -118,18 +118,36 @@ class MarketAnalysisService:
         normalized_symbol = symbol.strip().upper()
         analysis_time = datetime.now(VIETNAM_TZ)
         analysis_date = analysis_time.strftime("%Y-%m-%d %H:%M:%S%z")
+        report_generator_name = (
+            getattr(self.report_generator, "display_name", None)
+            or getattr(self.report_generator, "model", None)
+            or type(self.report_generator).__name__
+        )
+        logger.info(
+            "AI-only analysis started symbol=%s engine=%s",
+            normalized_symbol,
+            report_generator_name,
+        )
         try:
             quantitative_context, latest_candle = await asyncio.to_thread(
                 self._fetch_ai_ohlcv,
                 normalized_symbol,
                 analysis_time,
             )
+            logger.info(
+                "AI-only OHLCV ready symbol=%s candles=%s latest_date=%s",
+                normalized_symbol,
+                len(quantitative_context.get("ohlcv_daily", [])),
+                latest_candle.trading_date,
+            )
+            logger.info("AI-only report generation started symbol=%s", normalized_symbol)
             report = await asyncio.to_thread(
                 self.report_generator.generate_pp10_report,
                 symbol=normalized_symbol,
                 analysis_date=analysis_date,
                 quantitative_context=quantitative_context,
             )
+            logger.info("AI-only report generation completed symbol=%s", normalized_symbol)
         except NoMarketDataError as exc:
             logger.warning("AI-only OHLCV data unavailable for symbol=%s", normalized_symbol)
             raise AnalysisUnavailable(
@@ -137,7 +155,12 @@ class MarketAnalysisService:
                 user_message=f"Mã {normalized_symbol} hiện không có dữ liệu OHLCV.",
             ) from exc
         except (GeminiError, OpenRouterError) as exc:
-            logger.warning("AI-only PP10 analysis failed for symbol=%s", normalized_symbol)
+            logger.warning(
+                "AI-only PP10 analysis failed for symbol=%s error=%s",
+                normalized_symbol,
+                exc,
+                exc_info=True,
+            )
             raise AnalysisUnavailable(
                 "AI-only PP10 analysis is unavailable",
                 user_message=(

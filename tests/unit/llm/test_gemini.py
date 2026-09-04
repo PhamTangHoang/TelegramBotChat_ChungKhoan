@@ -32,6 +32,16 @@ class FakeModels:
         return self.response
 
 
+class SequenceModels:
+    def __init__(self, responses: list[object]) -> None:
+        self.responses = responses
+        self.calls: list[dict[str, object]] = []
+
+    def generate_content(self, **kwargs: object) -> object:
+        self.calls.append(kwargs)
+        return self.responses.pop(0)
+
+
 def test_gemini_uses_structured_schema_and_validates_response() -> None:
     models = FakeModels(SimpleNamespace(parsed=explanation().model_dump()))
     explainer = GeminiExplainer(
@@ -112,6 +122,7 @@ def test_gemini_builds_structured_ai_only_pp10_report() -> None:
     assert result.total_score == 64
     config = models.calls[0]["config"]
     assert config.response_schema["title"] == "PP10AIReport"
+    assert config.max_output_tokens == 6000
     prompt = models.calls[0]["contents"]
     assert "OHLCV" in prompt
     assert "ohlcv_daily" in prompt
@@ -141,6 +152,30 @@ def test_gemini_can_judge_openrouter_analyst_drafts() -> None:
     prompt = models.calls[0]["contents"]
     assert "Debate Drafts" in prompt
     assert "technical-model" in prompt
+
+
+def test_gemini_repairs_pp10_report_when_a_score_exceeds_criterion_limit() -> None:
+    invalid = _ai_report().model_dump()
+    invalid["criteria"][14]["score"] = 5
+    models = SequenceModels(
+        [
+            SimpleNamespace(parsed=invalid),
+            SimpleNamespace(parsed=_ai_report().model_dump()),
+        ]
+    )
+    explainer = GeminiExplainer(
+        api_key="test", model="test-model", client=SimpleNamespace(models=models)
+    )
+
+    result = explainer.generate_pp10_report(
+        symbol="HDB", analysis_date="2026-09-04", quantitative_context={}
+    )
+
+    assert result.criteria[14].score == 0
+    assert len(models.calls) == 2
+    repair_prompt = models.calls[1]["contents"]
+    assert "TOÀN BỘ JSON" in repair_prompt
+    assert "criterion 15" in repair_prompt
 
 
 def test_invalid_gemini_response_is_recoverable() -> None:

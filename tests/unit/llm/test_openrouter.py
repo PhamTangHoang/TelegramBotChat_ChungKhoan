@@ -6,6 +6,7 @@ from typing import Any, get_args
 import httpx
 import pytest
 
+from app.llm.gemini import GeminiError
 from app.llm.openrouter import (
     HybridReportGenerator,
     OpenRouterClient,
@@ -96,6 +97,21 @@ def test_openrouter_client_uses_bearer_auth_and_returns_content() -> None:
     assert requester.calls[0]["headers"]["Authorization"] == "Bearer test-key"
 
 
+def test_openrouter_client_surfaces_provider_error_detail() -> None:
+    def requester(**kwargs: Any) -> httpx.Response:
+        request = httpx.Request("POST", kwargs["url"])
+        return httpx.Response(
+            429,
+            json={"error": {"message": "rate limit exceeded", "code": 429}},
+            request=request,
+        )
+
+    client = OpenRouterClient(api_key="test-key", requester=requester)
+
+    with pytest.raises(OpenRouterError, match="HTTP 429.*rate limit exceeded"):
+        client.complete(model="test-model", messages=[])
+
+
 def test_debate_runs_analysts_and_judge_then_validates_pp10_report() -> None:
     payload = json.dumps(_report_payload(), ensure_ascii=False)
 
@@ -126,6 +142,37 @@ def test_debate_runs_analysts_and_judge_then_validates_pp10_report() -> None:
     assert "technical-model" in judge_prompt
     assert "pattern-model" in judge_prompt
     assert judge_call["json"]["response_format"]["type"] == "json_schema"
+
+
+def test_openrouter_judge_repairs_invalid_pp10_score_once() -> None:
+    judge_calls = 0
+
+    def response_for(model: str, _body: dict[str, Any]) -> str:
+        nonlocal judge_calls
+        if model != "judge-model":
+            return f"Ý kiến độc lập từ {model}."
+        judge_calls += 1
+        payload = _report_payload()
+        if judge_calls == 1:
+            payload["criteria"][14]["score"] = 5
+        return json.dumps(payload, ensure_ascii=False)
+
+    requester = FakeRequester(response_for)
+    explainer = OpenRouterDebateExplainer(
+        api_key="test-key",
+        analyst_models=("technical-model", "pattern-model", "risk-model"),
+        judge_model="judge-model",
+        client=OpenRouterClient(api_key="test-key", requester=requester),
+    )
+
+    result = explainer.generate_pp10_report(
+        symbol="HDB", analysis_date="2026-09-04", quantitative_context={}
+    )
+
+    assert result.criteria[14].score == 0
+    assert judge_calls == 2
+    repair_call = requester.calls[-1]["json"]
+    assert "REPAIR REQUIRED" in repair_call["messages"][0]["content"]
 
 
 def test_debate_can_send_analyst_drafts_to_gemini_judge() -> None:
@@ -213,6 +260,27 @@ def test_hybrid_report_generator_falls_back_to_gemini() -> None:
             return fallback_report
 
     generator = HybridReportGenerator(primary=FailingGenerator(), fallback=FallbackGenerator())
+
+    assert (
+        generator.generate_pp10_report(symbol="FPT", analysis_date="2026-09-04")
+        is fallback_report
+    )
+
+
+def test_hybrid_report_generator_falls_back_when_gemini_judge_fails() -> None:
+    fallback_report = SimpleNamespace(total_score=42)
+
+    class FailingDebateGenerator:
+        def generate_pp10_report(self, **_kwargs: Any) -> PP10AIReport:
+            raise GeminiError("judge unavailable")
+
+    class FallbackGenerator:
+        def generate_pp10_report(self, **_kwargs: Any) -> Any:
+            return fallback_report
+
+    generator = HybridReportGenerator(
+        primary=FailingDebateGenerator(), fallback=FallbackGenerator()
+    )
 
     assert (
         generator.generate_pp10_report(symbol="FPT", analysis_date="2026-09-04")

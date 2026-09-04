@@ -150,6 +150,11 @@ OpenRouter dùng endpoint tương thích OpenAI và structured JSON cho báo cá
 của tài khoản; muốn kết quả ổn định hơn hãy khai báo model ID cụ thể trong
 `OPENROUTER_ANALYST_MODELS` và `OPENROUTER_JUDGE_MODEL`.
 
+Ứng dụng giới hạn lượt analyst ở 1.200 token và báo cáo PP10 ở 6.000 token để
+tránh response bị kéo dài vô hạn. Nếu báo cáo JSON vi phạm schema hoặc vượt trần
+điểm từng tiêu chí, bot sẽ tự gửi một lượt yêu cầu sửa toàn bộ JSON; nếu vẫn lỗi,
+log sẽ ghi rõ provider, mã HTTP và nguyên nhân để dễ kiểm tra trên Render.
+
 ### Tin tức RSS
 
 | Biến | Mặc định | Ý nghĩa |
@@ -358,7 +363,9 @@ demo ngắn hạn hoặc khi đổi kiến trúc sang webhook/database bên ngo�
 | News có tiêu đề nhưng không có bài liên quan | Đang gọi /news nên bot trả tin thị trường chung. | Gọi /news SYMBOL, ví dụ /news FPT. |
 | /market báo không ở regular trading session | Gọi ngoài giờ HOSE. | Giờ regular mặc định: 09:00–11:30 và 13:00–14:45; ngày nghỉ vẫn không có phiên. |
 | Một số PP10 hiện DATA_UNAVAILABLE | Provider chưa cung cấp dữ liệu chuyên biệt hoặc chưa đủ lịch sử. | Đây là trạng thái an toàn; không tự thay bằng giá trị ước đoán. |
-| /analyze chạy lâu | OpenRouter đang chạy analyst song song rồi chờ Judge, hoặc instance đang khởi động. | Xem log `AI report backend configured` và log OpenRouter; giảm số model nếu cần. |
+| /analyze chạy lâu | OpenRouter đang chạy analyst song song rồi chờ Judge, hoặc instance đang khởi động. | Xem các log `AI-only OHLCV ready`, `OpenRouter request completed`, `Gemini PP10 request completed`; giảm số analyst nếu cần. |
+| /analyze trả AI chưa trả báo cáo | Provider trả JSON sai schema, hết quota/rate limit hoặc request timeout. | Xem log `AI-only PP10 analysis failed`; log mới có model, mã HTTP, thời gian và lý do provider. |
+| Bot báo mã không có dữ liệu sau khi nhập câu tự nhiên | Câu có thể chứa từ như “cho”, “cổ phiếu”, “mã”; parser cũ có thể lấy nhầm một từ làm ticker. | Dùng dạng `/analyze REE` hoặc “phân tích mã REE”; parser hiện ưu tiên mã sau nhãn `mã`/`cổ phiếu` và preflight mã lạ. |
 | /analyze báo thiếu API key | Chưa có provider AI khả dụng. | Bổ sung `GEMINI_API_KEY` hoặc `OPENROUTER_API_KEY`; dùng `/chart`, `/market` hoặc `/news` cho tính năng dữ liệu riêng. |
 
 ## Cấu trúc project

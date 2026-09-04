@@ -12,6 +12,24 @@ from app.telegram.commands import HELP_TEXT
 from app.telegram.reliability import send_report_with_chart, send_text_chunks
 
 logger = logging.getLogger(__name__)
+_NON_SYMBOL_WORDS = {
+    "analyze",
+    "chart",
+    "cho",
+    "co",
+    "cua",
+    "gi",
+    "help",
+    "la",
+    "ma",
+    "market",
+    "phieu",
+    "t",
+    "tin",
+    "tuc",
+    "ve",
+    "xem",
+}
 
 
 @dataclass(frozen=True)
@@ -64,30 +82,39 @@ def _fold_text(value: str) -> str:
 
 def _classify_text(value: str) -> tuple[str, str | None]:
     folded = _fold_text(value).strip()
+    labeled_symbol = _extract_labeled_symbol(folded)
     chart_match = re.search(
         r"\b(?:chart|bieu do|ve bieu do)\s+(?:ma\s+)?([a-z]{2,5})\b", folded
     )
     if chart_match:
-        return "chart", chart_match.group(1).upper()
+        return "chart", labeled_symbol or chart_match.group(1).upper()
 
     analysis_match = re.search(
         r"\b(?:analyze|phan tich(?: ky thuat)?|danh gia)\s+(?:ma\s+)?([a-z]{2,5})\b",
         folded,
     )
     if analysis_match:
-        return "analyze", analysis_match.group(1).upper()
+        candidate = analysis_match.group(1).upper()
+        if labeled_symbol:
+            return "analyze", labeled_symbol
+        if candidate.lower() not in _NON_SYMBOL_WORDS:
+            return "analyze", candidate
+    if re.search(r"\b(?:analyze|phan tich|danh gia)\b", folded) and labeled_symbol:
+        return "analyze", labeled_symbol
 
     if "tin thi truong" in folded:
         return "news", None
+    related_news_match = re.search(r"\btin .*?\b(?:ve|cua)\s+(?:ma\s+)?([a-z]{2,5})\b", folded)
+    if related_news_match:
+        return "news", related_news_match.group(1).upper()
     news_match = re.search(
         r"\b(?:news|tin tuc|tin moi|tin co phieu)(?:\s+(?:ma\s+)?([a-z]{2,5}))?\b",
         folded,
     )
     if news_match:
-        return "news", (news_match.group(1).upper() if news_match.group(1) else None)
-    related_news_match = re.search(r"\btin .*?\b(?:ve|cua)\s+(?:ma\s+)?([a-z]{2,5})\b", folded)
-    if related_news_match:
-        return "news", related_news_match.group(1).upper()
+        return "news", labeled_symbol or (
+            news_match.group(1).upper() if news_match.group(1) else None
+        )
 
     if "thi truong" in folded or folded in {"market", "trang thai thi truong"}:
         return "market", None
@@ -104,6 +131,20 @@ def _classify_text(value: str) -> tuple[str, str | None]:
     }:
         return "analyze", folded.upper()
     return "chat", None
+
+
+def _extract_labeled_symbol(folded: str) -> str | None:
+    patterns = (
+        r"\bma\s+(?:co\s+phieu\s+)?([a-z]{2,5})\b",
+        r"\bco\s+phieu\s+([a-z]{2,5})\b",
+        r"\bticker\s+([a-z]{2,5})\b",
+    )
+    for pattern in patterns:
+        for match in re.finditer(pattern, folded):
+            candidate = match.group(1).lower()
+            if candidate not in _NON_SYMBOL_WORDS:
+                return candidate.upper()
+    return None
 
 
 def build_router(

@@ -138,7 +138,11 @@ def test_message_chunking_preserves_all_content_and_limit() -> None:
 def test_natural_text_classification_supports_analysis_chart_market_and_help() -> None:
     assert _classify_text("phân tích mã FPT") == ("analyze", "FPT")
     assert _classify_text("analyze FPT") == ("analyze", "FPT")
+    assert _classify_text("phân tích cho t mã REE xem") == ("analyze", "REE")
+    assert _classify_text("phân tích cổ phiếu ACB") == ("analyze", "ACB")
     assert _classify_text("tin tức FPT") == ("news", "FPT")
+    assert _classify_text("tin tức về mã ACB") == ("news", "ACB")
+    assert _classify_text("tin tức cổ phiếu REE") == ("news", "REE")
     assert _classify_text("tin thị trường") == ("news", None)
     assert _classify_text("vẽ biểu đồ VNM") == ("chart", "VNM")
     assert _classify_text("thị trường hôm nay thế nào") == ("market", None)
