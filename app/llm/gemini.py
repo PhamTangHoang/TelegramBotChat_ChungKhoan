@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Sequence
 from copy import deepcopy
 from time import perf_counter
 from typing import Any
@@ -126,15 +127,17 @@ class GeminiExplainer:
         analysis_date: str,
         quantitative_context: Any | None = None,
         debate_drafts: list[dict[str, str]] | None = None,
+        chart_images: Sequence[bytes] | None = None,
     ) -> PP10AIReport:
         prompt = build_pp10_prompt(
             symbol=symbol,
             analysis_date=analysis_date,
             quantitative_context=quantitative_context,
             debate_drafts=debate_drafts,
+            chart_count=len(chart_images or ()),
         )
         try:
-            response = self._generate_pp10_response(prompt)
+            response = self._generate_pp10_response(prompt, chart_images=chart_images)
         except Exception as exc:  # network/API failures must be recoverable by the caller
             logger.warning("Gemini PP10 report failed", exc_info=True)
             raise GeminiError("Gemini PP10 report request failed") from exc
@@ -153,7 +156,10 @@ class GeminiExplainer:
             validation_error=validation_error,
         )
         try:
-            repaired_response = self._generate_pp10_response(repair_prompt)
+            repaired_response = self._generate_pp10_response(
+                repair_prompt,
+                chart_images=chart_images,
+            )
         except Exception as repair_exc:
             logger.warning("Gemini PP10 repair request failed", exc_info=True)
             raise GeminiError("Gemini PP10 repair request failed") from repair_exc
@@ -163,15 +169,29 @@ class GeminiExplainer:
             logger.warning("Gemini repaired PP10 report is still invalid", exc_info=True)
             raise GeminiError("Gemini PP10 report failed schema validation") from repair_exc
 
-    def _generate_pp10_response(self, prompt: str) -> Any:
+    def _generate_pp10_response(
+        self,
+        prompt: str,
+        *,
+        chart_images: Sequence[bytes] | None = None,
+    ) -> Any:
         from google.genai import types
 
         started_at = perf_counter()
         logger.info("Gemini PP10 request started model=%s", self.model)
+        contents: Any = prompt
+        if chart_images:
+            contents = [
+                prompt,
+                *(
+                    types.Part.from_bytes(data=image, mime_type="image/png")
+                    for image in chart_images[:6]
+                ),
+            ]
         try:
             response = self.client.models.generate_content(
                 model=self.model,
-                contents=prompt,
+                contents=contents,
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json",
                     response_schema=_pp10_response_schema(),

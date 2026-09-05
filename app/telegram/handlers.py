@@ -7,6 +7,7 @@ from collections.abc import Awaitable
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from app.chart.chart_engine import ChartAttachment
 from app.telegram.access_control import AccessDenied, RateLimiter, WhitelistAccessController
 from app.telegram.commands import HELP_TEXT
 from app.telegram.reliability import send_report_with_chart, send_text_chunks
@@ -36,6 +37,7 @@ _NON_SYMBOL_WORDS = {
 class TelegramReport:
     text: str
     chart: bytes | None = None
+    charts: tuple[ChartAttachment, ...] = ()
     gemini_task: Awaitable[str | None] | None = None
 
 
@@ -59,7 +61,12 @@ def _user_error_message(error: Exception, fallback: str) -> str:
 
 
 async def _send_analysis_report(message: Any, report: TelegramReport) -> None:
-    await send_report_with_chart(message, report.text, chart=report.chart)
+    await send_report_with_chart(
+        message,
+        report.text,
+        chart=report.chart,
+        charts=report.charts,
+    )
     if report.gemini_task is None:
         return
     try:

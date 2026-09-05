@@ -198,6 +198,7 @@ class OpenRouterDebateExplainer:
         symbol: str,
         analysis_date: str,
         quantitative_context: Any | None = None,
+        chart_images: Sequence[bytes] | None = None,
     ) -> PP10AIReport:
         jobs = list(zip(_ANALYST_ROLES, self.analyst_models, strict=False))
         drafts: list[DebateDraft] = []
@@ -238,6 +239,7 @@ class OpenRouterDebateExplainer:
                 analysis_date=analysis_date,
                 quantitative_context=quantitative_context,
                 debate_drafts=draft_payload,
+                chart_images=chart_images,
             )
         judge_prompt = build_openrouter_judge_prompt(
             symbol=symbol,

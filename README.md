@@ -1,8 +1,8 @@
 # VN Stock Analyst Bot
 
 Bot Telegram hỗ trợ báo cáo PP10Ulti 2.0 bằng AI theo prompt mẫu. Lệnh
-`/analyze SYMBOL` lấy OHLCV cơ bản rồi gửi trực tiếp cho AI, không cào dữ liệu
-phân tích chuyên biệt;
+`/analyze SYMBOL` lấy OHLCV cơ bản, dựng các biểu đồ từ dữ liệu đó, gửi ảnh cho
+AI đối chiếu rồi trả ảnh và báo cáo;
 `/chart`, `/market` và `/news` là các tính năng dữ liệu riêng.
 
 Luồng `/analyze` là AI-generated từ OHLCV. Điểm, xếp hạng, vùng giá và kịch bản
@@ -115,11 +115,13 @@ hiển thị theo điểm chỉ số, không phải VND.
 | GEMINI_MODEL | Không | gemini-3.1-flash-lite | Model dùng để tạo báo cáo PP10 structured JSON. |
 | GEMINI_TIMEOUT_SECONDS | Không | 20 | Timeout HTTP cho Gemini; không đặt dưới 10 giây. |
 
-Lệnh `/analyze` lấy OHLCV một lần rồi gửi dữ liệu đó cho provider AI. Khi dùng
+Lệnh `/analyze` lấy OHLCV một lần, dựng tối đa bốn ảnh biểu đồ rồi gửi dữ liệu
+và ảnh đó cho provider AI. Khi dùng
 OpenRouter, ba analyst chạy song song và một Judge tổng hợp; khi dùng Gemini chỉ
 có một lượt tạo báo cáo. Luồng này không gọi fundamentals, VN-Index, RSS hoặc
-chart. Prompt yêu cầu AI không bịa giá/chỉ báo ngoài dữ liệu OHLCV, tin tức, link hay vùng giá;
-phần thiếu dữ liệu phải ghi rõ. Điểm số và nhận định vẫn là nội dung AI tạo để
+nguồn dữ liệu dòng tiền bên ngoài. Prompt yêu cầu AI không bịa giá/chỉ báo ngoài
+dữ liệu OHLCV và ảnh, tin tức, link hay vùng giá; phần thiếu dữ liệu phải ghi rõ.
+Điểm số và nhận định vẫn là nội dung AI tạo để
 tham khảo, không phải signal đã xác minh.
 
 ### OpenRouter và hội đồng AI
@@ -198,7 +200,7 @@ Các lệnh public:
 | --- | --- |
 | /start | Khởi động và xem hướng dẫn nhanh. |
 | /help | Xem toàn bộ lệnh. |
-| /analyze FPT | Lấy OHLCV cơ bản và nhờ AI hoặc hội đồng OpenRouter tạo báo cáo PP10Ulti. |
+| /analyze FPT | Lấy OHLCV, dựng ảnh biểu đồ và nhờ AI hoặc hội đồng OpenRouter tạo báo cáo PP10Ulti. |
 | /chart FPT | Tạo và gửi biểu đồ kỹ thuật. |
 | /news FPT | Xem tin liên quan đến FPT, kèm link bài gốc. |
 | /news | Xem tin thị trường chung. |
@@ -232,6 +234,13 @@ Một báo cáo PP10Ulti 2.0 do AI tạo gồm các phần chính:
 4. Kế hoạch hành động tham khảo với ba kịch bản, vùng giá, stop-loss, mục tiêu
    và R:R.
 5. Kết luận và lưu ý rằng AI chỉ nhận OHLCV cùng các dữ liệu được cung cấp.
+
+Mỗi `/analyze` gửi tối đa bốn ảnh trước phần chữ: xu hướng ngày với MA20/50/150/200,
+bộ chỉ báo RSI/Stoch RSI/MACD/ADX/OBV/CMF, VPVR và xu hướng tuần với MA30/MA40.
+Các ảnh đều được dựng từ OHLCV đã lấy cho đúng mã, không phải ảnh AI tự tạo. Gemini
+được nhận cùng các ảnh này để đối chiếu khi viết báo cáo. Dự án hiện chưa có nguồn
+dữ liệu đã xác minh cho màn hình cơ bản, khối ngoại hoặc tự doanh nên không dựng ảnh
+giả cho các nhóm đó; báo cáo phải ghi rõ là chưa có dữ liệu.
 
 ### PP10Ulti
 
@@ -351,6 +360,14 @@ Không dùng Render Free cho bot chạy 24/7: free web service có thể sleep k
 không có inbound traffic và database free có thời hạn. Render phù hợp hơn cho
 demo ngắn hạn hoặc khi đổi kiến trúc sang webhook/database bên ngoài.
 
+Repo có workflow GitHub Actions `.github/workflows/keep-render-awake.yml` ping
+`/health` mỗi 5 phút và có thể chạy thủ công bằng `workflow_dispatch`. Workflow
+chỉ có tác dụng khi GitHub Actions đang bật và workflow đã chạy thành công; nó
+không thể tự đánh thức process từ bên trong Render. Endpoint `/` và `/health`
+đều trả HTTP 200 để Render/GitHub kiểm tra. Nếu cần uptime ổn định hơn, dùng
+UptimeRobot hoặc một cron bên ngoài gọi `/health`; vẫn nên dùng VM có process
+liên tục cho bot Telegram production.
+
 ## Xử lý lỗi thường gặp
 
 | Hiện tượng | Nguyên nhân thường gặp | Cách kiểm tra/xử lý |
@@ -363,7 +380,7 @@ demo ngắn hạn hoặc khi đổi kiến trúc sang webhook/database bên ngo�
 | News có tiêu đề nhưng không có bài liên quan | Đang gọi /news nên bot trả tin thị trường chung. | Gọi /news SYMBOL, ví dụ /news FPT. |
 | /market báo không ở regular trading session | Gọi ngoài giờ HOSE. | Giờ regular mặc định: 09:00–11:30 và 13:00–14:45; ngày nghỉ vẫn không có phiên. |
 | Một số PP10 hiện DATA_UNAVAILABLE | Provider chưa cung cấp dữ liệu chuyên biệt hoặc chưa đủ lịch sử. | Đây là trạng thái an toàn; không tự thay bằng giá trị ước đoán. |
-| /analyze chạy lâu | OpenRouter đang chạy analyst song song rồi chờ Judge, hoặc instance đang khởi động. | Xem các log `AI-only OHLCV ready`, `OpenRouter request completed`, `Gemini PP10 request completed`; giảm số analyst nếu cần. |
+| /analyze chạy lâu | Render đang khởi động, đang dựng 4 ảnh, hoặc OpenRouter chạy analyst song song rồi chờ Judge. | Xem các log `AI-only OHLCV ready`, `AI-only chart bundle ready`, `OpenRouter request completed`, `Gemini PP10 request completed`; giảm số analyst nếu cần. |
 | /analyze trả AI chưa trả báo cáo | Provider trả JSON sai schema, hết quota/rate limit hoặc request timeout. | Xem log `AI-only PP10 analysis failed`; log mới có model, mã HTTP, thời gian và lý do provider. |
 | Bot báo mã không có dữ liệu sau khi nhập câu tự nhiên | Câu có thể chứa từ như “cho”, “cổ phiếu”, “mã”; parser cũ có thể lấy nhầm một từ làm ticker. | Dùng dạng `/analyze REE` hoặc “phân tích mã REE”; parser hiện ưu tiên mã sau nhãn `mã`/`cổ phiếu` và preflight mã lạ. |
 | /analyze báo thiếu API key | Chưa có provider AI khả dụng. | Bổ sung `GEMINI_API_KEY` hoặc `OPENROUTER_API_KEY`; dùng `/chart`, `/market` hoặc `/news` cho tính năng dữ liệu riêng. |

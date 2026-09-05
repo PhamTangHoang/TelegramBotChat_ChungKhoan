@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from typing import Any
 
+from app.chart.chart_engine import ChartAttachment
 from app.telegram.formatter import chunk_message
 
 logger = logging.getLogger(__name__)
@@ -33,15 +34,27 @@ async def send_report_with_chart(
     text: str,
     *,
     chart: bytes | None = None,
+    charts: Sequence[ChartAttachment] = (),
     sleep: Callable[[float], Awaitable[Any]] = asyncio.sleep,
 ) -> None:
-    await send_text_chunks(message.answer, text, sleep=sleep)
-    if chart is None:
-        return
-    try:
-        from aiogram.types import BufferedInputFile
+    attachments = list(charts)
+    if chart is not None:
+        attachments.append(
+            ChartAttachment(
+                filename="technical-chart.png",
+                caption="Biểu đồ kỹ thuật",
+                content=chart,
+            )
+        )
+    for attachment in attachments:
+        try:
+            from aiogram.types import BufferedInputFile
 
-        await message.answer_photo(BufferedInputFile(chart, filename="technical-chart.png"))
-    except Exception:
-        # Text report has already been delivered; chart failure must not erase it.
-        logger.exception("Telegram chart upload failed")
+            await message.answer_photo(
+                BufferedInputFile(attachment.content, filename=attachment.filename),
+                caption=attachment.caption,
+            )
+        except Exception:
+            # Chart failure must not erase the text report or the remaining images.
+            logger.exception("Telegram chart upload failed filename=%s", attachment.filename)
+    await send_text_chunks(message.answer, text, sleep=sleep)

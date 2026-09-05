@@ -12,9 +12,11 @@ class DirectGemini:
 
     def __init__(self) -> None:
         self.context: dict[str, object] | None = None
+        self.chart_images: list[bytes] | None = None
 
     def generate_pp10_report(self, **kwargs: object) -> PP10AIReport:
         self.context = kwargs["quantitative_context"]  # type: ignore[assignment]
+        self.chart_images = kwargs.get("chart_images")  # type: ignore[assignment]
         maximums = (10, 8, 8, 8, 8, 8, 7, 5, 6, 8, 4, 5, 5, 4, 4, 2)
         return PP10AIReport(
             total_score=64,
@@ -74,7 +76,19 @@ def test_analyze_sends_only_basic_ohlcv_to_gemini() -> None:
                     volume=1000000,
                     source="test",
                     is_final=False,
-                )
+                ),
+                MarketCandle(
+                    symbol="FPT",
+                    exchange="HOSE",
+                    trading_date=date(2026, 9, 3),
+                    open=Decimal("26.8"),
+                    high=Decimal("27.1"),
+                    low=Decimal("26.5"),
+                    close=Decimal("27.0"),
+                    volume=900000,
+                    source="test",
+                    is_final=True,
+                ),
             ]
 
     service = MarketAnalysisService(
@@ -104,4 +118,6 @@ def test_analyze_sends_only_basic_ohlcv_to_gemini() -> None:
     assert report.gemini_task is None
     assert gemini.context is not None
     assert gemini.context["latest_candle"]["close"] == "27.2"
-    assert len(gemini.context["ohlcv_daily"]) == 1
+    assert len(gemini.context["ohlcv_daily"]) == 2
+    assert gemini.chart_images is not None
+    assert len(gemini.chart_images) == 4

@@ -200,6 +200,7 @@ def test_debate_can_send_analyst_drafts_to_gemini_judge() -> None:
         symbol="FPT",
         analysis_date="2026-09-04",
         quantitative_context={"latest_candle": {"close": 100}},
+        chart_images=[b"fake-png"],
     )
 
     assert isinstance(result, PP10AIReport)
@@ -208,6 +209,7 @@ def test_debate_can_send_analyst_drafts_to_gemini_judge() -> None:
     assert judge.kwargs["debate_drafts"]
     assert len(judge.kwargs["debate_drafts"]) == 3
     assert judge.kwargs["quantitative_context"]["latest_candle"]["close"] == 100
+    assert judge.kwargs["chart_images"] == [b"fake-png"]
 
 
 def test_debate_keeps_working_when_one_analyst_fails() -> None:

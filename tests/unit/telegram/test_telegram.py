@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.analysis.pp10 import PP10Evaluator
+from app.chart.chart_engine import ChartAttachment
 from app.domain.enums import AnalysisKind, DataFreshness, EvaluationStatus, Risk, RuleStatus, Signal
 from app.domain.schemas import IndicatorSnapshot, RuleReason, RuleResult
 from app.telegram.access_control import AccessDenied, RateLimiter, WhitelistAccessController
@@ -398,3 +399,41 @@ def test_analysis_sender_delivers_gemini_follow_up_after_technical_report() -> N
         "Báo cáo PP10 kỹ thuật",
         "GIẢI THÍCH GEMINI\n• Kết luận: Tiếp tục theo dõi.",
     ]
+
+
+def test_analysis_sender_delivers_chart_bundle_before_report() -> None:
+    import importlib.util
+
+    if importlib.util.find_spec("aiogram") is None:
+        pytest.skip("aiogram is installed in the Docker image")
+    events: list[object] = []
+
+    class Message:
+        async def answer(self, text: str) -> None:
+            events.append(text)
+
+        async def answer_photo(self, photo: object, **kwargs: object) -> None:
+            events.append((photo, kwargs))
+
+    async def scenario() -> None:
+        await _send_analysis_report(
+            Message(),
+            TelegramReport(
+                text="Báo cáo PP10",
+                charts=(
+                    ChartAttachment(
+                        filename="HDB-daily-trend.png",
+                        caption="Xu hướng ngày",
+                        content=b"fake-png",
+                    ),
+                ),
+            ),
+        )
+
+    import asyncio
+
+    asyncio.run(scenario())
+
+    assert len(events) == 2
+    assert isinstance(events[0], tuple)
+    assert events[1] == "Báo cáo PP10"

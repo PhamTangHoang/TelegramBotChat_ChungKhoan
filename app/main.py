@@ -121,6 +121,11 @@ async def lifespan(_: FastAPI):
 app = FastAPI(title="VN Stock Analyst Bot", version="1.6.0", lifespan=lifespan)
 
 
-@app.get("/health")
+@app.api_route("/", methods=["GET", "HEAD"])
+def root() -> dict[str, str]:
+    return {"status": "ok", "service": "vn-stock-analyst-bot"}
+
+
+@app.api_route("/health", methods=["GET", "HEAD"])
 def health() -> dict[str, str]:
     return {"status": "ok"}

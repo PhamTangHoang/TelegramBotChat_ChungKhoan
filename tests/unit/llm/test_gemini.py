@@ -129,6 +129,25 @@ def test_gemini_builds_structured_ai_only_pp10_report() -> None:
     assert "FPT" in prompt
 
 
+def test_gemini_pp10_receives_chart_images_as_model_parts() -> None:
+    models = FakeModels(SimpleNamespace(parsed=_ai_report().model_dump()))
+    explainer = GeminiExplainer(
+        api_key="test", model="test-model", client=SimpleNamespace(models=models)
+    )
+
+    explainer.generate_pp10_report(
+        symbol="HDB",
+        analysis_date="2026-09-04",
+        quantitative_context={},
+        chart_images=[b"fake-png"],
+    )
+
+    contents = models.calls[0]["contents"]
+    assert isinstance(contents, list)
+    assert len(contents) == 2
+    assert getattr(contents[1], "inline_data", None) is not None
+
+
 def test_gemini_can_judge_openrouter_analyst_drafts() -> None:
     models = FakeModels(SimpleNamespace(parsed=_ai_report().model_dump()))
     explainer = GeminiExplainer(

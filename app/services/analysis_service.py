@@ -129,7 +129,7 @@ class MarketAnalysisService:
             report_generator_name,
         )
         try:
-            quantitative_context, latest_candle = await asyncio.to_thread(
+            quantitative_context, latest_candle, chart_candles = await asyncio.to_thread(
                 self._fetch_ai_ohlcv,
                 normalized_symbol,
                 analysis_time,
@@ -140,12 +140,33 @@ class MarketAnalysisService:
                 len(quantitative_context.get("ohlcv_daily", [])),
                 latest_candle.trading_date,
             )
+            try:
+                chart_bundle = await asyncio.to_thread(
+                    self.chart_engine.render_bundle,
+                    chart_candles,
+                    symbol=normalized_symbol,
+                    as_of=analysis_time,
+                    is_final=False,
+                )
+            except Exception:
+                logger.warning(
+                    "AI-only chart bundle unavailable symbol=%s",
+                    normalized_symbol,
+                    exc_info=True,
+                )
+                chart_bundle = ()
+            logger.info(
+                "AI-only chart bundle ready symbol=%s charts=%s",
+                normalized_symbol,
+                len(chart_bundle),
+            )
             logger.info("AI-only report generation started symbol=%s", normalized_symbol)
             report = await asyncio.to_thread(
                 self.report_generator.generate_pp10_report,
                 symbol=normalized_symbol,
                 analysis_date=analysis_date,
                 quantitative_context=quantitative_context,
+                chart_images=[item.content for item in chart_bundle],
             )
             logger.info("AI-only report generation completed symbol=%s", normalized_symbol)
         except NoMarketDataError as exc:
@@ -188,11 +209,12 @@ class MarketAnalysisService:
                 ),
             ),
             chart=None,
+            charts=chart_bundle,
         )
 
     def _fetch_ai_ohlcv(
         self, symbol: str, as_of: datetime
-    ) -> tuple[dict[str, Any], MarketCandle]:
+    ) -> tuple[dict[str, Any], MarketCandle, list[MarketCandle]]:
         try:
             symbol_index = self.settings.watchlist_symbols.index(symbol)
             exchange = self.settings.watchlist_exchanges[symbol_index]
@@ -234,7 +256,7 @@ class MarketAnalysisService:
                 "news",
             ],
         }
-        return canonicalize(context), latest_candle
+        return canonicalize(context), latest_candle, rows
 
     @staticmethod
     def _ai_candle_payload(candle: MarketCandle) -> dict[str, Any]:

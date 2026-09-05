@@ -103,11 +103,14 @@ def build_pp10_prompt(
     analysis_date: str,
     quantitative_context: Any | None = None,
     debate_drafts: list[dict[str, str]] | None = None,
+    chart_count: int = 0,
 ) -> str:
     request = {
         "symbol": symbol.strip().upper(),
         "analysis_date": analysis_date,
         "ohlcv_data_provided": quantitative_context is not None,
+        "chart_images_provided": chart_count > 0,
+        "chart_image_count": chart_count,
         "news_provided": False,
         "requested_output": "PP10Ulti 2.0 report with 16 criteria and 3 scenarios",
     }
@@ -119,6 +122,13 @@ def build_pp10_prompt(
         sections.append("\nQuantitative Context:\nNo live OHLCV data was supplied.")
     else:
         sections.append("\nQuantitative Context:\n" + canonical_json(quantitative_context))
+    if chart_count:
+        sections.append(
+            "\nChart Images:\n"
+            f"Có {chart_count} ảnh biểu đồ được đính kèm sau prompt. Hãy đối chiếu ảnh với "
+            "OHLCV; chỉ mô tả tín hiệu nhìn thấy rõ hoặc có thể kiểm tra từ dữ liệu, không suy "
+            "đoán số liệu mà ảnh không thể hiện."
+        )
     if debate_drafts:
         sections.append(
             "\nDebate Drafts:\n"
